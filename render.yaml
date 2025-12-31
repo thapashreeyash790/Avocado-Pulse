@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: avocado-pm-server
+    env: node
+    plan: free
+    region: oregon
+    branch: main
+    root: server
+    buildCommand: npm install --production --legacy-peer-deps && npm run build
+    startCommand: npm start
