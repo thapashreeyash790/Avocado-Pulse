@@ -170,7 +170,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setProjects(prev => [...prev, created]);
       logActivity(`created project "${created.name}"`, 'CREATE');
     } catch (err: any) {
-      pushNotification(`Failed to create project: ${err.message || err}`, 'warning');
+      // fallback to local-only project when backend is unreachable
+      const fallback: Project = { ...project, id: Math.random().toString(36).substr(2, 9) };
+      setProjects(prev => [...prev, fallback]);
+      pushNotification(`Created project locally (offline): ${fallback.name}`, 'info');
+      logActivity(`created project "${fallback.name}" (local)`, 'CREATE');
     }
   };
 
@@ -179,7 +183,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const created = await api.createClient(client);
       setClients(prev => [...prev, created]);
     } catch (err: any) {
-      pushNotification(`Failed to add client: ${err.message || err}`, 'warning');
+      // fallback to local-only client
+      const fallback: ClientProfile = { ...client, id: Math.random().toString(36).substr(2, 9) };
+      setClients(prev => [...prev, fallback]);
+      pushNotification(`Added client locally (offline): ${fallback.name}`, 'info');
     }
   };
 
