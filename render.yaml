@@ -7,4 +7,4 @@ services:
     branch: main
     root: server
     buildCommand: npm install --production --legacy-peer-deps && npm run build
-    startCommand: npm start
+    startCommand: node index.js
