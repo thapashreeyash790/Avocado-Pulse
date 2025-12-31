@@ -1,7 +1,7 @@
 
 import { User, UserRole, Task, Project, ClientProfile, Invoice } from '../types';
 
-const API_BASE = (import.meta.env && import.meta.env.VITE_API_URL) || 'http://localhost:4000';
+const API_BASE = (import.meta.env && import.meta.env.VITE_API_URL) || '';
 
 async function safeFetch(path: string, options?: RequestInit) {
   try {
@@ -56,7 +56,7 @@ export const api = {
       if (users.length === 0) {
         // create default admin if none
         const adminEmail = 'thapa.shreeyash790@gmail.com'.toLowerCase();
-        users = [{ id: 'admin-001', name: 'Avocado Admin', email: adminEmail, password: 'helloworld1432', role: 0, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${adminEmail}` }];
+        users = [{ id: 'admin-001', name: 'Avocado Admin', email: adminEmail, password: 'helloworld1432', role: UserRole.ADMIN, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${adminEmail}` }];
         localStorage.setItem(key, JSON.stringify(users));
       }
       const found = users.find((u: any) => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);
