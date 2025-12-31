@@ -1,0 +1,8 @@
+{
+  "name": "Avocado Project manager",
+  "description": "A high-transparency project management platform for teams and clients with real-time Kanban tracking and approval workflows.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
