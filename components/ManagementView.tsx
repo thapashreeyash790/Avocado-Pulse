@@ -9,7 +9,7 @@ const ManagementView: React.FC = () => {
   const [showClientModal, setShowClientModal] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
 
-  const isAdmin = user?.role === UserRole.ADMIN;
+  const isInternal = user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN;
 
   return (
     <div className="p-8 space-y-12 max-w-6xl mx-auto animate-in fade-in duration-500">
@@ -18,7 +18,7 @@ const ManagementView: React.FC = () => {
           <h2 className="text-3xl font-bold text-black tracking-tight">Workspace Management</h2>
           <p className="text-gray-500 font-medium">Link clients to projects and monitor workspace capacity</p>
         </div>
-        {isAdmin && (
+        {isInternal && (
           <div className="flex gap-3">
             <button onClick={() => setShowClientModal(true)} className="px-5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-sm text-black hover:bg-gray-50 transition-all shadow-sm">Add Client</button>
             <button onClick={() => setShowProjectModal(true)} className="px-5 py-2.5 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-lg">New Project</button>
