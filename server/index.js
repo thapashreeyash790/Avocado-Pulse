@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { Low } = require('lowdb');
+let db;
 const { JSONFile } = require('lowdb/node');
 const path = require('path');
 
@@ -12,18 +12,30 @@ require('dotenv').config();
 const { GoogleGenAI } = require('@google/genai');
 
 
-const file = path.join(__dirname, 'db.json');
-const adapter = new JSONFile(file);
-const defaultData = { projects: [], tasks: [], invoices: [], clients: [], users: [] };
-const db = new Low(adapter, defaultData);
+async function loadLow() {
+  try {
+    // Try CommonJS require first (works if lowdb exposes CJS)
+    // eslint-disable-next-line global-require
+    const mod = require('lowdb');
+    if (mod && mod.Low) return mod.Low;
+  } catch (e) {
+    // ignore and try dynamic import
+  }
+  const mod = await import('lowdb');
+  return mod.Low;
+}
 
 async function init() {
+  const Low = await loadLow();
+  const file = path.join(__dirname, 'db.json');
+  const adapter = new JSONFile(file);
+  const defaultData = { projects: [], tasks: [], invoices: [], clients: [], users: [] };
+  db = new Low(adapter, defaultData);
   await db.read();
   if (!db.data) db.data = defaultData;
   await db.write();
 }
 
-init();
 
 // Generic helpers
 app.get('/api/:resource', async (req, res) => {
@@ -78,9 +90,15 @@ app.delete('/api/:resource/:id', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Node ${process.version}`);
-  console.log(`Avocado PM server running on http://localhost:${PORT}`);
+// start server after DB init completes
+init().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Node ${process.version}`);
+    console.log(`Avocado PM server running on http://localhost:${PORT}`);
+  });
+}).catch(err => {
+  console.error('Failed to start server', err);
+  process.exit(1);
 });
 
 // Server-side Gemini proxy endpoints
