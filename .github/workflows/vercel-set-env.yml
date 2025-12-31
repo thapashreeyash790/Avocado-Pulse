@@ -1,0 +1,64 @@
+name: Set Vercel Env and Redeploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  set-env-and-redeploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure required secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then echo "Missing secret VERCEL_TOKEN" && exit 1; fi
+          if [ -z "$VERCEL_PROJECT_ID" ]; then echo "Missing secret VERCEL_PROJECT_ID" && exit 1; fi
+          if [ -z "$VITE_API_URL" ]; then echo "Missing secret VITE_API_URL" && exit 1; fi
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Set or update Vercel env var
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: |
+          echo "Fetching existing env vars for project $VERCEL_PROJECT_ID"
+          RES=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env")
+          echo "$RES" | jq '.'
+          EXIST_ID=$(echo "$RES" | jq -r --arg name "VITE_API_URL" '.env[] | select(.key==$name) | .id' | head -n1)
+          if [ -n "$EXIST_ID" ] && [ "$EXIST_ID" != "null" ]; then
+            echo "Updating existing env var id=$EXIST_ID"
+            curl -s -X PATCH -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
+              -d "{\"value\": \"$VITE_API_URL\", \"target\": [\"production\"]}" \
+              "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env/$EXIST_ID" | jq '.'
+          else
+            echo "Creating env var VITE_API_URL"
+            curl -s -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
+              -d "{\"key\": \"VITE_API_URL\", \"value\": \"$VITE_API_URL\", \"target\": [\"production\"]}" \
+              "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env" | jq '.'
+          fi
+
+      - name: Trigger redeploy by creating empty commit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git switch main || git checkout -b main
+          git commit --allow-empty -m "chore: trigger vercel redeploy [ci skip]"
+          git push origin main

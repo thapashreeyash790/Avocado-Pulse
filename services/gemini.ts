@@ -1,50 +1,50 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
 import { Task } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
-// Generate a practical 3-5 item checklist for a task using Gemini 3 Flash
-export async function generateTaskChecklist(title: string, description: string) {
+async function safeJson(res: Response) {
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Generate a practical 3-5 item checklist for a task titled "${title}". Description: "${description}"`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              text: { type: Type.STRING, description: "Checklist item text" }
-            },
-            required: ["text"]
-          }
-        }
-      }
+    return await res.json();
+  } catch { return null; }
+}
+
+export async function generateTaskChecklist(title: string, description: string) {
+  if (!API_BASE) {
+    // no backend configured — return a safe fallback
+    return [{ text: 'Break down this task into sub-steps' }];
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/genai/checklist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description })
     });
-    
-    // Trim and parse JSON from the response text
-    const jsonStr = response.text?.trim() || "[]";
-    return JSON.parse(jsonStr);
-  } catch (error) {
-    console.error("Gemini Checklist Error:", error);
-    return [{ text: "Break down this task into sub-steps" }];
+    if (!res.ok) return [{ text: 'Break down this task into sub-steps' }];
+    const json = await safeJson(res);
+    if (!json || !json.items) return [{ text: 'Break down this task into sub-steps' }];
+    return json.items;
+  } catch (err) {
+    console.error('Gemini proxy error', err);
+    return [{ text: 'Break down this task into sub-steps' }];
   }
 }
 
-// Summarize overall project progress using Gemini 3 Flash
 export async function summarizeProjectProgress(tasks: Task[]) {
+  if (!API_BASE) {
+    return 'Project is moving along as planned. Check the board for specific task updates.';
+  }
   try {
-    const taskSummary = tasks.map(t => `${t.title} (${t.status})`).join(", ");
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Summarize the overall progress for a client based on these tasks: ${taskSummary}. Keep it professional and encouraging.`,
+    const res = await fetch(`${API_BASE}/api/genai/summary`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks })
     });
-    return response.text || "Progress summary unavailable at this time.";
-  } catch (error) {
-    console.error("Gemini Summary Error:", error);
-    return "Project is moving along as planned. Check the board for specific task updates.";
+    if (!res.ok) return 'Progress summary unavailable at this time.';
+    const json = await safeJson(res);
+    return (json && json.text) || 'Progress summary unavailable at this time.';
+  } catch (err) {
+    console.error('Gemini proxy error', err);
+    return 'Progress summary unavailable at this time.';
   }
 }
