@@ -21,17 +21,49 @@ export const api = {
   // Users
   async signup(email: string, password: string, role: UserRole, name: string): Promise<User> {
     const payload = { email, password, role, name };
-    const created = await safeFetch('/api/users', { method: 'POST', body: JSON.stringify(payload) });
-    const { password: _, ...user } = created as any;
-    return user as User;
+    try {
+      const created = await safeFetch('/api/users', { method: 'POST', body: JSON.stringify(payload) });
+      const { password: _, ...user } = created as any;
+      return user as User;
+    } catch (err) {
+      // fallback to localStorage-based signup for environments without backend
+      const key = 'avocado_users';
+      const raw = localStorage.getItem(key);
+      let users = raw ? JSON.parse(raw) : [];
+      if (users.find((u: any) => u.email.toLowerCase() === email.toLowerCase())) {
+        throw new Error('An account with this email already exists.');
+      }
+      const newUser = { id: Math.random().toString(36).substr(2,9), name, email, password, role, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}` };
+      users.push(newUser);
+      localStorage.setItem(key, JSON.stringify(users));
+      const { password: _p, ...userSafe } = newUser as any;
+      return userSafe as User;
+    }
   },
 
   async login(email: string, password: string): Promise<User> {
-    const users = await safeFetch('/api/users') as any[];
-    const found = users.find(u => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);
-    if (!found) throw new Error('Invalid email or password.');
-    const { password: _, ...userSafe } = found;
-    return userSafe as User;
+    try {
+      const users = await safeFetch('/api/users') as any[];
+      const found = users.find(u => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);
+      if (!found) throw new Error('Invalid email or password.');
+      const { password: _, ...userSafe } = found;
+      return userSafe as User;
+    } catch (err) {
+      // fallback to localStorage users
+      const key = 'avocado_users';
+      const raw = localStorage.getItem(key);
+      let users = raw ? JSON.parse(raw) : [];
+      if (users.length === 0) {
+        // create default admin if none
+        const adminEmail = 'thapa.shreeyash790@gmail.com'.toLowerCase();
+        users = [{ id: 'admin-001', name: 'Avocado Admin', email: adminEmail, password: 'helloworld1432', role: 0, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${adminEmail}` }];
+        localStorage.setItem(key, JSON.stringify(users));
+      }
+      const found = users.find((u: any) => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);
+      if (!found) throw new Error('Invalid email or password.');
+      const { password: _, ...userSafe } = found;
+      return userSafe as User;
+    }
   },
 
   // Generic resource helpers
