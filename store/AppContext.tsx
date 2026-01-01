@@ -44,7 +44,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('avocado_current_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const parsed = saved ? JSON.parse(saved) : null;
+      if (parsed && typeof parsed !== 'object') throw new Error('Corrupt user in localStorage');
+      return parsed;
+    } catch (e) {
+      console.error('Failed to load user from localStorage:', e, saved);
+      localStorage.removeItem('avocado_current_user');
+      return null;
+    }
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

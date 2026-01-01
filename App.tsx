@@ -15,8 +15,11 @@ import { AppProvider, useApp } from './store/AppContext';
 import { ICONS } from './constants';
 
 const AuthenticatedApp: React.FC = () => {
-  const { user } = useApp();
 
+  const { user } = useApp();
+  if (typeof user === 'undefined') {
+    return <div style={{color:'red',padding:20}}>Critical error: user is undefined. Please check AppContext and localStorage. <br/>Try clearing browser storage and reloading.</div>;
+  }
   if (!user) {
     return <LoginView />;
   }
