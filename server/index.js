@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 let db;
-const { JSONFile } = require('lowdb/node');
+let JSONFile;
 const path = require('path');
 
 const app = express();
@@ -27,6 +27,9 @@ async function loadLow() {
 
 async function init() {
   const Low = await loadLow();
+  // dynamically import JSONFile (some lowdb distributions expose this as ESM)
+  const nodeMod = await import('lowdb/node');
+  JSONFile = nodeMod.JSONFile;
   const file = path.join(__dirname, 'db.json');
   const adapter = new JSONFile(file);
   const defaultData = { projects: [], tasks: [], invoices: [], clients: [], users: [] };
