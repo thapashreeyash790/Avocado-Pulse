@@ -102,7 +102,7 @@ app.post('/api/:resource', async (req, res) => {
       const verifyUrl = `${frontendHost}#/verify?token=${verifyToken}`;
       const subject = 'Verify your Avocado Project Manager account';
       const text = `Hi ${payload.name || ''},\n\nPlease verify your email by visiting: ${verifyUrl}`;
-      const html = `<p>Hi ${payload.name || ''},</p><p>Please verify your email by clicking <a href="${verifyUrl}">here</a>.</p>`;
+      const html = `<p>Hi ${payload.name || ''},</p><p>Please verify your email by clicking <a href=\"${verifyUrl}\">here</a>.</p>`;
       await sendMail(payload.email, subject, text, html);
     } catch (err) {
       console.error('Failed to send verify email', err);
@@ -110,6 +110,39 @@ app.post('/api/:resource', async (req, res) => {
     const safe = { ...payload };
     delete safe.password;
     return res.status(201).json(safe);
+  }
+
+  // Special-case clients: auto-create user if not present
+  if (resource === 'clients') {
+    const clientEmail = (payload.email || '').toLowerCase();
+    const users = db.data.users || [];
+    const userExists = users.some(u => (u.email || '').toLowerCase() === clientEmail);
+    if (!userExists && clientEmail) {
+      const verifyToken = Math.random().toString(36).substr(2, 9);
+      const newUser = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: payload.name,
+        email: clientEmail,
+        password: Math.random().toString(36).substr(2, 8), // temp password
+        role: 'CLIENT',
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${clientEmail}`,
+        verified: false,
+        verifyToken,
+        createdAt: new Date().toISOString()
+      };
+      db.data.users.push(newUser);
+      await db.write();
+      try {
+        const frontendHost = process.env.FRONTEND_URL || `http://localhost:${process.env.FRONTEND_PORT || 5173}`;
+        const verifyUrl = `${frontendHost}#/verify?token=${verifyToken}`;
+        const subject = 'Welcome to Avocado Project Manager';
+        const text = `Hi ${payload.name || ''},\n\nYour client account has been created. Please verify your email and set your password: ${verifyUrl}`;
+        const html = `<p>Hi ${payload.name || ''},</p><p>Your client account has been created. Please <a href=\"${verifyUrl}\">verify your email and set your password</a>.</p>`;
+        await sendMail(clientEmail, subject, text, html);
+      } catch (err) {
+        console.error('Failed to send client welcome email', err);
+      }
+    }
   }
 
   db.data[resource].push(payload);
