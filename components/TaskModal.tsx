@@ -1,3 +1,6 @@
+  // Only allow client to edit/delete their own tasks
+  const isClientOwner = user?.role === UserRole.CLIENT && user?.name === task?.assignedTo;
+  const canEdit = user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN || isClientOwner;
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
@@ -48,12 +51,12 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
   if (!task) return null;
 
   const handleStatusChange = (status: TaskStatus) => {
-    if (user?.role === UserRole.CLIENT) return;
+    if (!canEdit) return;
     updateTaskStatus(taskId, status);
   };
 
   const handleSaveTitle = () => {
-    if (!editedTitle.trim()) return;
+    if (!editedTitle.trim() || !canEdit) return;
     setTasks(prev => prev.map(t => 
       t.id === taskId ? { ...t, title: editedTitle.trim() } : t
     ));
@@ -61,6 +64,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
   };
 
   const handleSaveDescription = () => {
+    if (!canEdit) return;
     setTasks(prev => prev.map(t => 
       t.id === taskId ? { ...t, description: editedDescription } : t
     ));
@@ -74,6 +78,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
   };
 
   const handleDelete = () => {
+    if (!canEdit) return;
     if (window.confirm("Are you sure you want to delete this task?")) {
       deleteTask(taskId);
       onClose();
@@ -81,6 +86,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
   };
 
   const handleCopy = () => {
+    if (!canEdit) return;
     copyTask(taskId);
     setShowActionsMenu(false);
     alert("Task duplicated successfully!");
@@ -94,7 +100,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
   };
 
   const handleToggleChecklist = (itemId: string) => {
-    if (user?.role === UserRole.CLIENT) return;
+    if (!canEdit) return;
     setTasks(prev => prev.map(t => {
       if (t.id === taskId) {
         const newChecklist = t.checklist.map(item => 
@@ -149,7 +155,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
                 ) : (
                   <div className="flex items-center gap-2 group">
                     <h3 className="text-xl font-bold text-gray-900 leading-tight">{task.title}</h3>
-                    {user?.role === UserRole.TEAM && (
+                    {(user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN || isClientOwner) && (
                       <button 
                         onClick={() => setIsEditingTitle(true)}
                         className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-indigo-600 transition-all"
@@ -177,7 +183,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
                 <button onClick={handleCopy} className="w-full px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-3">
                   <ICONS.Plus className="w-4 h-4" /> Duplicate Task
                 </button>
-                {user?.role === UserRole.TEAM && (
+                {(user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN || isClientOwner) && (
                   <button onClick={handleDelete} className="w-full px-4 py-2.5 text-left text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-3 border-t border-gray-50 mt-1">
                     <ICONS.AlertCircle className="w-4 h-4" /> Delete Task
                   </button>
@@ -197,7 +203,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
                   <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
                     Description
                   </h4>
-                  {user?.role === UserRole.TEAM && !isEditingDescription && (
+                  {(user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN || isClientOwner) && !isEditingDescription && (
                     <button 
                       onClick={() => setIsEditingDescription(true)}
                       className="text-[10px] font-bold text-indigo-600 hover:underline uppercase tracking-widest"
@@ -242,7 +248,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
                      Checklist
                      <span className="bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded text-[10px]">{task.checklist.filter(i => i.isCompleted).length}/{task.checklist.length}</span>
                   </h4>
-                  {user?.role === UserRole.TEAM && (
+                  {(user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN || isClientOwner) && (
                     <button 
                       onClick={handleAiChecklist}
                       disabled={isGeneratingChecklist}

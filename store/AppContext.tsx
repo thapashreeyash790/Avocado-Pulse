@@ -264,6 +264,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [logActivity, tasks]);
 
   const addTask = useCallback(async (task: Partial<Task>) => {
+    // Only allow clients to add tasks, not edit/delete/update
+    if (user?.role !== UserRole.TEAM && user?.role !== UserRole.ADMIN && user?.role !== UserRole.CLIENT) return;
     const payload = {
       projectId: task.projectId || '',
       title: task.title || 'Untitled Task',

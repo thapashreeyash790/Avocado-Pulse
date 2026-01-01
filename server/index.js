@@ -171,6 +171,14 @@ app.post('/api/auth/reset', async (req, res) => {
   res.json({ success: true });
 });
 
+// Helper: get user role and name from request (simulate auth)
+function getUserFromRequest(req) {
+  // In real app, use JWT/session. Here, allow passing ?userRole=CLIENT&userName=John
+  const role = req.query.userRole || req.headers['x-user-role'];
+  const name = req.query.userName || req.headers['x-user-name'];
+  return { role, name };
+}
+
 app.put('/api/:resource/:id', async (req, res) => {
   const { resource, id } = req.params;
   const payload = req.body;
@@ -179,6 +187,16 @@ app.put('/api/:resource/:id', async (req, res) => {
   if (!Array.isArray(list)) return res.status(404).json({ error: 'Resource not found' });
   const idx = list.findIndex(i => i.id === id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  // Permission check for tasks
+  if (resource === 'tasks') {
+    const user = getUserFromRequest(req);
+    const task = list[idx];
+    const isTeamOrAdmin = user.role === 'TEAM' || user.role === 'ADMIN';
+    const isClientOwner = user.role === 'CLIENT' && user.name && user.name === task.assignedTo;
+    if (!isTeamOrAdmin && !isClientOwner) {
+      return res.status(403).json({ error: 'Forbidden: You cannot edit this task.' });
+    }
+  }
   db.data[resource][idx] = { ...db.data[resource][idx], ...payload };
   await db.write();
   res.json(db.data[resource][idx]);
@@ -189,6 +207,16 @@ app.delete('/api/:resource/:id', async (req, res) => {
   await db.read();
   const list = db.data[resource];
   if (!Array.isArray(list)) return res.status(404).json({ error: 'Resource not found' });
+  // Permission check for tasks
+  if (resource === 'tasks') {
+    const user = getUserFromRequest(req);
+    const task = list.find(i => i.id === id);
+    const isTeamOrAdmin = user.role === 'TEAM' || user.role === 'ADMIN';
+    const isClientOwner = user.role === 'CLIENT' && user.name && user.name === task?.assignedTo;
+    if (!isTeamOrAdmin && !isClientOwner) {
+      return res.status(403).json({ error: 'Forbidden: You cannot delete this task.' });
+    }
+  }
   db.data[resource] = list.filter(i => i.id !== id);
   await db.write();
   res.status(204).end();
