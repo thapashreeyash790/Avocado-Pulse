@@ -10,6 +10,7 @@ app.use(express.json());
 require('dotenv').config();
 
 const { GoogleGenAI } = require('@google/genai');
+const nodemailer = require('nodemailer');
 
 
 async function loadLow() {
@@ -39,6 +40,26 @@ async function init() {
   await db.write();
 }
 
+// Simple mail helper: uses SMTP if configured, otherwise logs to console
+async function sendMail(to, subject, text, html) {
+  const smtpHost = process.env.SMTP_HOST;
+  if (!smtpHost) {
+    console.log('No SMTP configured — email preview:');
+    console.log({ to, subject, text, html });
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: (process.env.SMTP_SECURE || 'false') === 'true',
+    auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined
+  });
+
+  const from = process.env.EMAIL_FROM || `no-reply@${process.env.SMTP_HOST}`;
+  await transporter.sendMail({ from, to, subject, text, html });
+}
+
 
 // Generic helpers
 app.get('/api/:resource', async (req, res) => {
@@ -64,9 +85,90 @@ app.post('/api/:resource', async (req, res) => {
   if (!Array.isArray(db.data[resource])) return res.status(404).json({ error: 'Resource not found' });
   // Ensure id
   if (!payload.id) payload.id = (Date.now() + Math.floor(Math.random() * 10000)).toString();
+
+  // Special-case users: attach verification token and send email
+  if (resource === 'users') {
+    const email = (payload.email || '').toLowerCase();
+    const existing = (db.data.users || []).find(u => (u.email || '').toLowerCase() === email);
+    if (existing) return res.status(409).json({ error: 'User already exists' });
+    const verifyToken = Math.random().toString(36).substr(2, 9);
+    payload.verified = false;
+    payload.verifyToken = verifyToken;
+    payload.createdAt = new Date().toISOString();
+    db.data[resource].push(payload);
+    await db.write();
+    try {
+      const frontendHost = process.env.FRONTEND_URL || `http://localhost:${process.env.FRONTEND_PORT || 5173}`;
+      const verifyUrl = `${frontendHost}#/verify?token=${verifyToken}`;
+      const subject = 'Verify your Avocado Project Manager account';
+      const text = `Hi ${payload.name || ''},\n\nPlease verify your email by visiting: ${verifyUrl}`;
+      const html = `<p>Hi ${payload.name || ''},</p><p>Please verify your email by clicking <a href="${verifyUrl}">here</a>.</p>`;
+      await sendMail(payload.email, subject, text, html);
+    } catch (err) {
+      console.error('Failed to send verify email', err);
+    }
+    const safe = { ...payload };
+    delete safe.password;
+    return res.status(201).json(safe);
+  }
+
   db.data[resource].push(payload);
   await db.write();
   res.status(201).json(payload);
+});
+
+// Email verification endpoint
+app.post('/api/auth/verify', async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Missing token' });
+  await db.read();
+  const user = (db.data.users || []).find(u => u.verifyToken === token);
+  if (!user) return res.status(404).json({ error: 'Invalid token' });
+  user.verified = true;
+  delete user.verifyToken;
+  await db.write();
+  const safe = { ...user };
+  delete safe.password;
+  res.json(safe);
+});
+
+// Request password reset
+app.post('/api/auth/forgot', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Missing email' });
+  await db.read();
+  const user = (db.data.users || []).find(u => (u.email || '').toLowerCase() === (email || '').toLowerCase());
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const resetToken = Math.random().toString(36).substr(2, 12);
+  const expires = Date.now() + 3600000; // 1 hour
+  user.resetToken = resetToken;
+  user.resetExpires = expires;
+  await db.write();
+  try {
+    const frontendHost = process.env.FRONTEND_URL || `http://localhost:${process.env.FRONTEND_PORT || 5173}`;
+    const resetUrl = `${frontendHost}#/reset?token=${resetToken}`;
+    const subject = 'Reset your Avocado Project Manager password';
+    const text = `To reset your password, visit: ${resetUrl}`;
+    const html = `<p>To reset your password, click <a href="${resetUrl}">here</a>.</p>`;
+    await sendMail(user.email, subject, text, html);
+  } catch (err) {
+    console.error('Failed to send reset email', err);
+  }
+  res.json({ success: true });
+});
+
+// Perform password reset
+app.post('/api/auth/reset', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: 'Missing token or password' });
+  await db.read();
+  const user = (db.data.users || []).find(u => u.resetToken === token && u.resetExpires && u.resetExpires > Date.now());
+  if (!user) return res.status(400).json({ error: 'Invalid or expired token' });
+  user.password = password;
+  delete user.resetToken;
+  delete user.resetExpires;
+  await db.write();
+  res.json({ success: true });
 });
 
 app.put('/api/:resource/:id', async (req, res) => {

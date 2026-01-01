@@ -59,6 +59,9 @@ const LoginView: React.FC = () => {
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Password</label>
             <input required type="password" placeholder="••••••••" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-black font-semibold focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} />
           </div>
+          <div className="flex items-center justify-end">
+            <a href="#/reset-request" className="text-xs font-bold text-emerald-600">Forgot password?</a>
+          </div>
           {mode === 'SIGNUP' && (
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Register As</label>

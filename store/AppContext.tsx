@@ -283,7 +283,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setTasks(prev => [...prev, created]);
       logActivity(`created task "${created.title}"`, 'CREATE', created.id, created.title);
     } catch (err: any) {
-      pushNotification(`Failed to create task: ${err.message || err}`, 'warning');
+      // fallback to local-only task when backend is unreachable
+      const fallback: Task = { ...payload, id: Math.random().toString(36).substr(2, 9) } as Task;
+      setTasks(prev => [...prev, fallback]);
+      pushNotification(`Created task locally (offline): ${fallback.title}`, 'info');
+      logActivity(`created task "${fallback.title}" (local)`, 'CREATE', fallback.id, fallback.title);
     }
   }, [user, logActivity]);
 

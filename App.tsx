@@ -8,6 +8,9 @@ import TimelineView from './components/TimelineView';
 import ManagementView from './components/ManagementView';
 import SalesView from './components/SalesView';
 import LoginView from './components/LoginView';
+import VerifyEmailView from './components/VerifyEmailView';
+import ResetRequestView from './components/ResetRequestView';
+import ResetPasswordView from './components/ResetPasswordView';
 import { AppProvider, useApp } from './store/AppContext';
 import { ICONS } from './constants';
 
@@ -47,7 +50,12 @@ const App: React.FC = () => {
   return (
     <AppProvider>
       <HashRouter>
-        <AuthenticatedApp />
+        <Routes>
+          <Route path="/verify" element={<VerifyEmailView />} />
+          <Route path="/reset-request" element={<ResetRequestView />} />
+          <Route path="/reset" element={<ResetPasswordView />} />
+          <Route path="/*" element={<AuthenticatedApp />} />
+        </Routes>
       </HashRouter>
     </AppProvider>
   );

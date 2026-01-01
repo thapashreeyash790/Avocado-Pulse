@@ -33,7 +33,7 @@ export const api = {
       if (users.find((u: any) => u.email.toLowerCase() === email.toLowerCase())) {
         throw new Error('An account with this email already exists.');
       }
-      const newUser = { id: Math.random().toString(36).substr(2,9), name, email, password, role, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}` };
+      const newUser = { id: Math.random().toString(36).substr(2,9), name, email, password, role, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`, verified: false };
       users.push(newUser);
       localStorage.setItem(key, JSON.stringify(users));
       const { password: _p, ...userSafe } = newUser as any;
@@ -46,6 +46,7 @@ export const api = {
       const users = await safeFetch('/api/users') as any[];
       const found = users.find(u => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);
       if (!found) throw new Error('Invalid email or password.');
+      if (found.verified === false) throw new Error('Email not verified. Please check your inbox.');
       const { password: _, ...userSafe } = found;
       return userSafe as User;
     } catch (err) {
@@ -61,9 +62,23 @@ export const api = {
       }
       const found = users.find((u: any) => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);
       if (!found) throw new Error('Invalid email or password.');
+      if (found.verified === false) throw new Error('Email not verified. Please check your inbox.');
       const { password: _, ...userSafe } = found;
       return userSafe as User;
     }
+  },
+
+  async requestPasswordReset(email: string): Promise<void> {
+    await safeFetch('/api/auth/forgot', { method: 'POST', body: JSON.stringify({ email }) });
+  },
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    await safeFetch('/api/auth/reset', { method: 'POST', body: JSON.stringify({ token, password }) });
+  },
+
+  async verifyEmail(token: string): Promise<User> {
+    const user = await safeFetch('/api/auth/verify', { method: 'POST', body: JSON.stringify({ token }) }) as User;
+    return user;
   },
 
   // Generic resource helpers
