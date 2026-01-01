@@ -1,7 +1,8 @@
 
 import { User, UserRole, Task, Project, ClientProfile, Invoice } from '../types';
 
-const API_BASE = (import.meta.env && import.meta.env.VITE_API_URL) || '';
+// Use Vite's import.meta.env with correct typing
+const API_BASE = (import.meta as any).env?.VITE_API_URL || '';
 
 async function safeFetch(path: string, options?: RequestInit) {
   try {
@@ -82,18 +83,18 @@ export const api = {
   },
 
   // Generic resource helpers
-  async fetchResource<T = any>(resource: string): Promise<T[]> {
-    const data = await safeFetch(`/api/${resource}`) as T[];
+  async fetchResource(resource: string): Promise<any[]> {
+    const data = await safeFetch(`/api/${resource}`);
     return data || [];
   },
 
-  async createResource<T = any>(resource: string, payload: any): Promise<T> {
-    const created = await safeFetch(`/api/${resource}`, { method: 'POST', body: JSON.stringify(payload) }) as T;
+  async createResource(resource: string, payload: any): Promise<any> {
+    const created = await safeFetch(`/api/${resource}`, { method: 'POST', body: JSON.stringify(payload) });
     return created;
   },
 
-  async updateResource<T = any>(resource: string, id: string, payload: any): Promise<T> {
-    const updated = await safeFetch(`/api/${resource}/${id}`, { method: 'PUT', body: JSON.stringify(payload) }) as T;
+  async updateResource(resource: string, id: string, payload: any): Promise<any> {
+    const updated = await safeFetch(`/api/${resource}/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
     return updated;
   },
 
@@ -102,10 +103,10 @@ export const api = {
   },
 
   // Specific convenience wrappers
-  async fetchTasks(): Promise<Task[]> { return this.fetchResource<Task>('tasks'); },
-  async fetchProjects(): Promise<Project[]> { return this.fetchResource<Project>('projects'); },
-  async fetchClients(): Promise<ClientProfile[]> { return this.fetchResource<ClientProfile>('clients'); },
-  async fetchInvoices(): Promise<Invoice[]> { return this.fetchResource<Invoice>('invoices'); },
+  async fetchTasks(): Promise<any[]> { return this.fetchResource('tasks'); },
+  async fetchProjects(): Promise<any[]> { return this.fetchResource('projects'); },
+  async fetchClients(): Promise<any[]> { return this.fetchResource('clients'); },
+  async fetchInvoices(): Promise<any[]> { return this.fetchResource('invoices'); },
 
   async createProject(project: Omit<Project, 'id'>) { return this.createResource('projects', project); },
   async createClient(client: Omit<ClientProfile, 'id'>) { return this.createResource('clients', client); },
