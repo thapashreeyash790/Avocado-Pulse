@@ -36,6 +36,9 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    useEffect(() => {
+      console.log('[AppProvider] user state:', user, typeof user);
+    }, [user]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
