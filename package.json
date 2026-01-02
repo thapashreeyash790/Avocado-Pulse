@@ -16,7 +16,7 @@
     "recharts": "^2.13.3"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "dev:all": "concurrently \"npm run server\" \"npm run dev\"",
     "server": "node server/index.js",
     "build": "vite build",

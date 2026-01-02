@@ -78,7 +78,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setClients(fClients || []);
       setInvoices(fInvoices || []);
       setTasks(fTasks || []);
-    } catch (err) {
+    } catch (err: any) {
+      console.error('Load failed:', err);
+      pushNotification(`Server connection failed. Using offline data.`, 'error');
       // fallback to previously cached data in localStorage if server unreachable
       const savedProjects = localStorage.getItem('avocado_projects');
       const savedClients = localStorage.getItem('avocado_clients');
