@@ -2,7 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+const dotenv = require('dotenv');
+const envResult = dotenv.config({ path: path.join(__dirname, '.env') });
+if (envResult.error) {
+  console.error('[dotenv Error] Failed to load .env file:', envResult.error);
+} else {
+  console.log('[dotenv Info] Loaded .env from:', path.join(__dirname, '.env'));
+}
+
 
 const { GoogleGenAI } = require('@google/genai');
 const nodemailer = require('nodemailer');
@@ -117,7 +124,7 @@ const connectDB = async () => {
         id: 'admin-001',
         name: 'Avocado Admin',
         email: adminEmail,
-        password: 'helloworld1432',
+        password: 'helloworld',
         role: 'ADMIN',
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${adminEmail}`,
         verified: true
@@ -138,10 +145,14 @@ app.use(async (req, res, next) => {
   next();
 });
 
+console.log('[App Startup] SMTP_HOST:', process.env.SMTP_HOST || 'NOT SET');
+
 // --- Email Helper ---
 async function sendMail(to, subject, text, html) {
   const smtpHost = process.env.SMTP_HOST;
+  console.log('[Email Attempt] Target:', to, '| Host:', smtpHost || 'NONE');
   if (!smtpHost) {
+
     console.log('--- Email Simulated (No SMTP) ---');
     console.log('To:', to);
     console.log('Subject:', subject);
@@ -152,14 +163,40 @@ async function sendMail(to, subject, text, html) {
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: (process.env.SMTP_SECURE || 'false') === 'true',
-    auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined
+    secure: (process.env.SMTP_SECURE || 'false') === 'true', // port 587/STARTTLS should be false
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
   });
-  const from = process.env.EMAIL_FROM || `no-reply@${process.env.SMTP_HOST}`;
-  await transporter.sendMail({ from, to, subject, text, html });
+
+  try {
+    console.log('[SMTP Admin] Verifying connection...');
+    await transporter.verify();
+    console.log('[SMTP Admin] Connection verified successfully');
+
+    const from = process.env.EMAIL_FROM || `no-reply@${process.env.SMTP_HOST}`;
+    console.log(`[Email] Attempting to send to ${to} via ${smtpHost}...`);
+    await transporter.sendMail({ from, to, subject, text, html });
+    console.log(`[Email] Successfully sent to ${to}`);
+  } catch (err) {
+    console.error('[Email Error] Details:', err.code, err.command, err.response);
+    throw err;
+  }
 }
 
 // --- Routes ---
+
+app.get('/api/test-email', async (req, res) => {
+  try {
+    const to = req.query.email || process.env.SMTP_USER;
+    console.log('[Test Email] Request to send to:', to);
+    await sendMail(to, 'Test Email from Avocado PM', 'This is a test to verify SMTP settings.');
+    res.json({ success: true, message: `Email sent to ${to}. Check terminal for logs.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
 
 // Get all
 app.get('/api/:resource', async (req, res) => {
