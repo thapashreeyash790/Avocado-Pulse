@@ -5,8 +5,8 @@ dist
 /.idea
 /.vscode
 coverage
-/server/node_modules
-/server/db.json
+/api/node_modules
+/api/db.json
 npm-debug.log
 yarn-error.log
 .DS_Store

@@ -9,6 +9,7 @@ const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(cors());
+app.options('*', cors());
 app.use(express.json());
 
 // --- Database Schemas ---
