@@ -15,7 +15,7 @@ interface AppContextType {
   error: string | null;
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, role: UserRole, name: string) => Promise<void>;
+  signup: (email: string, password: string, role: UserRole, name: string) => Promise<any>;
   logout: () => void;
   updateTaskStatus: (taskId: string, status: TaskStatus) => Promise<void>;
   addTask: (task: Partial<Task>) => Promise<void>;
@@ -31,6 +31,8 @@ interface AppContextType {
   updateInvoiceStatus: (invoiceId: string, status: Invoice['status']) => Promise<void>;
   markNotificationsAsRead: () => void;
   dismissNotification: (id: string) => void;
+  verifyOTP: (token: string) => Promise<void>;
+  inviteTeamMember: (name: string, email: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -173,15 +175,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setError(null);
     setIsLoading(true);
     try {
-      const newUser = await api.signup(email, password, role, name);
-      setUser(newUser);
-      localStorage.setItem('avocado_current_user', JSON.stringify(newUser));
+      const res = await api.signup(email, password, role, name);
+      // Case 1: Team Signup (returns message only)
+      if (res.message === 'OTP sent') {
+        setIsLoading(false);
+        return { requiresOtp: true, email };
+      }
+      // Case 2: Client Signup (returns User object with verified: false)
+      if (res.verified === false) {
+        setIsLoading(false);
+        return { requiresOtp: true, email };
+      }
+
+      // Case 3: Already verified (unlikely for new signup but possible)
+      setUser(res);
+      localStorage.setItem('avocado_current_user', JSON.stringify(res));
       pushNotification(`Welcome to Avocado Project Manager!`, 'success');
+      return { requiresOtp: false };
     } catch (err: any) {
       setError(err.message);
       throw err;
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const verifyOTP = async (token: string) => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      const user = await api.verifyEmail(token);
+      setUser(user);
+      localStorage.setItem('avocado_current_user', JSON.stringify(user));
+      pushNotification('Email verified! You are now logged in.', 'success');
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const inviteTeamMember = async (name: string, email: string) => {
+    try {
+      await api.inviteTeamMember(name, email);
+      pushNotification(`Invitation sent to ${email}`, 'success');
+      logActivity(`invited ${name} to the team`, 'CREATE');
+    } catch (err: any) {
+      pushNotification(`Failed to invite: ${err.message}`, 'error');
     }
   };
 
@@ -408,7 +449,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       tasks: filteredTasks, projects: filteredProjects, clients, invoices: filteredInvoices, activities, notifications, user, isLoading, error,
       setTasks, login, signup, logout, updateTaskStatus, addTask, deleteTask, copyTask, addComment,
       approveTask, requestChanges, addProject, addClient, generateInvoice, payInvoice, updateInvoiceStatus,
-      markNotificationsAsRead, dismissNotification
+      markNotificationsAsRead, dismissNotification, verifyOTP, inviteTeamMember
     }}>
       {children}
     </AppContext.Provider>

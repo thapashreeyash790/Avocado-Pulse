@@ -24,12 +24,11 @@ async function safeFetch(path: string, options?: RequestInit) {
 
 export const api = {
   // Users
-  async signup(email: string, password: string, role: UserRole, name: string): Promise<User> {
+  async signup(email: string, password: string, role: UserRole, name: string): Promise<any> {
     const payload = { email, password, role, name };
     try {
-      const created = await safeFetch('/api/users', { method: 'POST', body: JSON.stringify(payload) });
-      const { password: _, ...user } = created as any;
-      return user as User;
+      const res = await safeFetch('/api/users', { method: 'POST', body: JSON.stringify(payload) });
+      return res; // Can be User object OR { message: 'OTP sent' }
     } catch (err) {
       // fallback to localStorage-based signup for environments without backend
       const key = 'avocado_users';
@@ -44,6 +43,10 @@ export const api = {
       const { password: _p, ...userSafe } = newUser as any;
       return userSafe as User;
     }
+  },
+
+  async inviteTeamMember(name: string, email: string): Promise<any> {
+    return await safeFetch('/api/team/invite', { method: 'POST', body: JSON.stringify({ name, email }) });
   },
 
   async login(email: string, password: string): Promise<User> {

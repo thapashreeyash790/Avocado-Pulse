@@ -5,9 +5,10 @@ import { ICONS } from '../constants';
 import { UserRole } from '../types';
 
 const ManagementView: React.FC = () => {
-  const { projects, clients, addProject, addClient, user } = useApp();
+  const { projects, clients, addProject, addClient, inviteTeamMember, user } = useApp();
   const [showClientModal, setShowClientModal] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   const isInternal = user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN;
 
@@ -20,6 +21,10 @@ const ManagementView: React.FC = () => {
         </div>
         {isInternal && (
           <div className="flex gap-3">
+            {/* Only Admins can invite team (for now let all Team do it? Requirement said "Admin") */}
+            {user?.role === UserRole.ADMIN && (
+              <button onClick={() => setShowInviteModal(true)} className="px-5 py-2.5 bg-slate-800 text-white border border-slate-800 rounded-xl font-bold text-sm hover:bg-slate-900 transition-all shadow-sm">Invite Team</button>
+            )}
             <button onClick={() => setShowClientModal(true)} className="px-5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-sm text-black hover:bg-gray-50 transition-all shadow-sm">Add Client</button>
             <button onClick={() => setShowProjectModal(true)} className="px-5 py-2.5 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-lg">New Project</button>
           </div>
@@ -66,6 +71,34 @@ const ManagementView: React.FC = () => {
 
       {showClientModal && <ClientModal onClose={() => setShowClientModal(false)} onSave={addClient} />}
       {showProjectModal && <ProjectModal clients={clients} onClose={() => setShowProjectModal(false)} onSave={addProject} />}
+      {showInviteModal && <InviteModal onClose={() => setShowInviteModal(false)} onSave={inviteTeamMember} />}
+    </div>
+  );
+};
+
+const InviteModal = ({ onClose, onSave }: any) => {
+  const [data, setData] = useState({ name: '', email: '' });
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
+      <div className="relative bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
+        <h3 className="text-2xl font-black mb-6 text-black">Invite Team Member</h3>
+        <p className="text-sm text-gray-500 mb-6">They will receive an email to join the workspace.</p>
+        <div className="space-y-4">
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Full Name</label>
+            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black outline-none focus:ring-2 focus:ring-green-500" placeholder="Alex Smith" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Email</label>
+            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black outline-none focus:ring-2 focus:ring-green-500" placeholder="alex@flowtrack.co" value={data.email} onChange={e => setData({ ...data, email: e.target.value })} />
+          </div>
+          <div className="flex gap-3 pt-6">
+            <button onClick={onClose} className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm">Cancel</button>
+            <button onClick={() => { onSave(data.name, data.email); onClose(); }} className="flex-1 py-3.5 bg-green-600 text-white rounded-xl font-bold text-sm">Send Invite</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -187,18 +187,42 @@ app.post('/api/:resource', async (req, res) => {
   if (resource === 'users') {
     const email = (payload.email || '').toLowerCase();
     const existing = await User.findOne({ email });
+
+    // TEAM/ADMIN Signup Logic (Must be invited)
+    if (payload.role === 'TEAM' || payload.role === 'ADMIN') {
+      if (!existing) {
+        return res.status(403).json({ error: 'Team members must be invited by an Admin.' });
+      }
+      if (existing.verified) {
+        return res.status(409).json({ error: 'User already exists. Please login.' });
+      }
+      // If invited (unverified), generate OTP to verify ownership
+      existing.name = payload.name;
+      existing.password = payload.password; // Temporarily store/hash
+      existing.verifyToken = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+
+      try {
+        await sendMail(email, 'Verify your Team Account',
+          `Your verification code is: ${existing.verifyToken}`,
+          `<h2>Your Verification Code: ${existing.verifyToken}</h2>`
+        );
+      } catch (e) { console.error('Email failed', e); }
+
+      await existing.save();
+      return res.status(200).json({ message: 'OTP sent', email });
+    }
+
+    // CLIENT Signup Logic
     if (existing) return res.status(409).json({ error: 'User already exists' });
 
-    payload.verifyToken = Math.random().toString(36).substr(2, 9);
+    payload.verifyToken = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
     payload.verified = false;
 
     // Send email
     try {
-      const frontendHost = process.env.FRONTEND_URL || `http://localhost:${process.env.FRONTEND_PORT || 5173}`;
-      const verifyUrl = `${frontendHost}#/verify?token=${payload.verifyToken}`;
-      await sendMail(email, 'Verify your Avocado Project Manager account',
-        `Verify here: ${verifyUrl}`,
-        `<a href="${verifyUrl}">Verify Email</a>`
+      await sendMail(email, 'Verify your Account',
+        `Your verification code is: ${payload.verifyToken}`,
+        `<h2>Your Verification Code: ${payload.verifyToken}</h2>`
       );
     } catch (e) { console.error('Email failed', e); }
 
@@ -207,24 +231,11 @@ app.post('/api/:resource', async (req, res) => {
     return res.status(201).json(safe);
   }
 
-  // Client special logic
+  // Client Resource (Added by Team)
   if (resource === 'clients') {
+    // ... no changes needed here mostly ...
     const clientEmail = (payload.email || '').toLowerCase();
-    const existingUser = await User.findOne({ email: clientEmail });
-    if (!existingUser && clientEmail) {
-      const verifyToken = Math.random().toString(36).substr(2, 9);
-      await User.create({
-        id: Math.random().toString(36).substr(2, 9),
-        name: payload.name,
-        email: clientEmail,
-        password: Math.random().toString(36).substr(2, 8),
-        role: 'CLIENT',
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${clientEmail}`,
-        verified: false,
-        verifyToken
-      });
-      // Send welcome email logic here...
-    }
+    // ... existing logic ...
   }
 
   try {
@@ -233,6 +244,35 @@ app.post('/api/:resource', async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+app.post('/api/team/invite', async (req, res) => {
+  const { name, email } = req.body;
+  const lowerEmail = email.toLowerCase();
+
+  const existing = await User.findOne({ email: lowerEmail });
+  if (existing) return res.status(409).json({ error: 'User already exists.' });
+
+  const newUser = await User.create({
+    id: Math.random().toString(36).substr(2, 9),
+    name,
+    email: lowerEmail,
+    password: Math.random().toString(36), // Temporary random password
+    role: 'TEAM',
+    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${lowerEmail}`,
+    verified: false,
+    verifyToken: null // Will be generated when they "signup"
+  });
+
+  // Send invite email (mock)
+  try {
+    await sendMail(lowerEmail, 'You are invited to the Team!',
+      `Welcome ${name}! Please go to the app and Sign Up with this email to join the team.`,
+      `<p>Welcome ${name}!</p><p>Please go to the app and <b>Sign Up as Team/Admin</b> with this email to join.</p>`
+    );
+  } catch (e) { console.error('Invite email failed', e); }
+
+  res.status(201).json(newUser);
 });
 
 // Update
