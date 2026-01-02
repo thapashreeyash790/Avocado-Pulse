@@ -143,5 +143,18 @@ export const api = {
   async updateTask(id: string, payload: any) { return this.updateResource('tasks', id, payload); },
   async deleteTask(id: string) { return this.deleteResource('tasks', id); },
   async createInvoice(invoice: any) { return this.createResource('invoices', invoice); },
-  async updateInvoice(id: string, payload: any) { return this.updateResource('invoices', id, payload); }
+  async updateInvoice(id: string, payload: any) { return this.updateResource('invoices', id, payload); },
+  async updateUser(id: string, payload: any) { return this.updateResource('users', id, payload); },
+
+  // Chat
+  async fetchConversations(): Promise<any[]> { return this.fetchResource('conversations'); },
+  async fetchMessages(conversationId: string): Promise<any[]> {
+    return await safeFetch(`/api/messages?conversationId=${conversationId}`);
+  },
+  async sendMessage(conversationId: string, senderId: string, text: string): Promise<any> {
+    return this.createResource('messages', { conversationId, senderId, text });
+  },
+  async createConversation(participants: string[], name?: string, type: 'DIRECT' | 'GROUP' = 'DIRECT'): Promise<any> {
+    return this.createResource('conversations', { participants, name, type });
+  }
 };

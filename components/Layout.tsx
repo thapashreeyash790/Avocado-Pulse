@@ -42,6 +42,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         <nav className="flex-1 px-4 space-y-1">
           <NavItem to="/" icon={<ICONS.LayoutDashboard />} label="Pulse" onClick={() => setSidebarOpen(false)} />
+          <NavItem to="/mystuff" icon={<ICONS.Archive />} label="My Stuff" onClick={() => setSidebarOpen(false)} />
 
           {(user.role === UserRole.ADMIN || user.permissions?.projects !== false) && (
             <NavItem to="/board" icon={<ICONS.Trello />} label="Projects" onClick={() => setSidebarOpen(false)} />
@@ -58,6 +59,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           {isInternalRole(user.role) && (user.role === UserRole.ADMIN || user.permissions?.management === true) && (
             <NavItem to="/management" icon={<ICONS.Settings />} label="Workspace" onClick={() => setSidebarOpen(false)} />
           )}
+
+          <NavItem to="/chat" icon={<ICONS.MessageSquare />} label="Messages" onClick={() => setSidebarOpen(false)} />
+          <NavItem to="/docs" icon={<ICONS.FileText />} label="Docs" onClick={() => setSidebarOpen(false)} />
         </nav>
 
         <div className="p-4 border-t border-gray-200">

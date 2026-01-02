@@ -1,7 +1,8 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { Task, TaskStatus, UserRole, ApprovalStatus, User, Activity, AppNotification, Project, ClientProfile, Invoice, TaskPriority } from '../types';
+import { Task, TaskStatus, UserRole, ApprovalStatus, User, Activity, AppNotification, Project, ClientProfile, Invoice, TaskPriority, Conversation, Message, Doc } from '../types';
 import { api } from '../services/api';
+import * as crypto from '../services/crypto';
 
 interface AppContextType {
   tasks: Task[];
@@ -14,6 +15,15 @@ interface AppContextType {
   isLoading: boolean;
   error: string | null;
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  team: User[];
+  allUsers: User[];
+  invitedEmail: string | null;
+  invitedRole: string | null;
+  inviteToken: string | null;
+  conversations: Conversation[];
+  activeConversation: Conversation | null;
+  messages: Message[];
+  docs: Doc[];
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, role: UserRole, name: string) => Promise<any>;
   logout: () => void;
@@ -33,16 +43,21 @@ interface AppContextType {
   dismissNotification: (id: string) => void;
   verifyOTP: (token: string) => Promise<boolean>;
   updateUser: (id: string, payload: Partial<User>) => Promise<void>;
-  requestEmailUpdate: (newEmail: string) => Promise<void>;
+  requestEmailUpdate: (userId: string, newEmail: string) => Promise<void>;
   confirmEmailUpdate: (token: string) => Promise<void>;
-  inviteTeamMember: (name: string, email: string, role: string) => Promise<void>;
+  inviteTeamMember: (name: string, email: string, role: string, permissions?: any) => Promise<void>;
   removeTeamMember: (id: string) => Promise<void>;
   cancelSignup: (email: string) => Promise<void>;
   resendOTP: (email: string) => Promise<void>;
-  team: User[];
-  invitedEmail: string | null;
-  invitedRole: string | null;
-  inviteToken: string | null;
+  sendMessage: (conversationId: string, text: string) => Promise<void>;
+  selectConversation: (conv: Conversation | null) => Promise<void>;
+  createConversation: (participants: string[], name?: string, type?: 'DIRECT' | 'GROUP') => Promise<any>;
+  addDoc: (name: string, url: string) => Promise<void>;
+  shareDoc: (docId: string, sharedWith: string[]) => Promise<void>;
+  trackTaskVisit: (taskId: string) => Promise<void>;
+  toggleBookmark: (resourceId: string) => Promise<void>;
+  addBoost: (targetUserId: string, message: string) => Promise<void>;
+  saveDraft: (type: string, content: any) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -74,12 +89,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activities, setActivities] = useState<Activity[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [team, setTeam] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
   const [invitedRole, setInvitedRole] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [docs, setDocs] = useState<Doc[]>([]);
+  const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null);
 
   const pushNotification = useCallback((message: string, type: AppNotification['type'] = 'info') => {
     const newNotif: AppNotification = {
@@ -92,10 +114,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications(prev => [newNotif, ...prev].slice(0, 20));
   }, []);
 
-  const logActivity = useCallback((action: string, type: Activity['type'], taskId?: string, taskTitle?: string) => {
+  const logActivity = useCallback(async (action: string, type: Activity['type'], taskId?: string, taskTitle?: string) => {
     if (!user) return;
-    const newActivity: Activity = {
-      id: Math.random().toString(36).substr(2, 9),
+    const newActivity: Partial<Activity> = {
       userId: user.id,
       userName: user.name,
       userAvatar: user.avatar,
@@ -103,26 +124,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type,
       taskId,
       taskTitle,
-      createdAt: new Date().toISOString()
     };
-    setActivities(prev => [newActivity, ...prev].slice(0, 50));
+    try {
+      const created = await api.createResource('activities', newActivity);
+      setActivities(prev => [created, ...prev].slice(0, 50));
+    } catch (err) {
+      console.error('Failed to log activity:', err);
+      // Fallback to local only
+      const fallback: Activity = {
+        id: Math.random().toString(36).substr(2, 9),
+        ...newActivity,
+        createdAt: new Date().toISOString()
+      } as Activity;
+      setActivities(prev => [fallback, ...prev].slice(0, 50));
+    }
   }, [user]);
 
   const loadAllData = useCallback(async () => {
     if (!user) return;
+    const perms = user.permissions || { billing: true, projects: true, timeline: true, management: false };
+    const isAdmin = user.role === UserRole.ADMIN;
+
     try {
-      const [fProjects, fClients, fInvoices, fTasks, fUsers] = await Promise.all([ // Modified
-        api.fetchProjects(),
-        api.fetchClients(),
-        api.fetchInvoices(),
-        api.fetchTasks(),
-        api.fetchUsers() // Added
+      const [fProjects, fClients, fInvoices, fTasks, fUsers, fConvs, fDocs, fActivities] = await Promise.all([
+        (isAdmin || perms.projects !== false) ? api.fetchProjects() : Promise.resolve([]),
+        (isAdmin || perms.management === true) ? api.fetchClients() : Promise.resolve([]),
+        (isAdmin || perms.billing !== false) ? api.fetchInvoices() : Promise.resolve([]),
+        (isAdmin || perms.timeline !== false) ? api.fetchTasks() : Promise.resolve([]),
+        (isAdmin || perms.management === true) ? api.fetchUsers() : Promise.resolve([user]),
+        api.fetchConversations(),
+        api.fetchResource('docs'),
+        api.fetchResource('activities')
       ]);
       setProjects(fProjects || []);
       setClients(fClients || []);
       setInvoices(fInvoices || []);
       setTasks(fTasks || []);
-      setTeam(fUsers.filter((u: any) => u.role !== 'CLIENT') || []); // include all job titles
+      setAllUsers(fUsers || []);
+      setTeam((fUsers || []).filter((u: any) => u.role !== 'CLIENT'));
+      setConversations(fConvs || []);
+      setDocs(fDocs || []);
+      setActivities(fActivities?.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || []);
     } catch (err: any) {
       console.error('Load failed:', err);
       pushNotification(`Connection failed: ${err.message || err}`, 'error');
@@ -149,6 +191,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 3000);
     return () => clearInterval(intervalId);
   }, [loadAllData, user]);
+
+  // Handle Encryption Keys
+  useEffect(() => {
+    const initEncryption = async () => {
+      if (!user) return;
+
+      let privKey: CryptoKey | null = null;
+      const storedPriv = localStorage.getItem(`ft_priv_${user.id}`);
+
+      if (storedPriv) {
+        try {
+          privKey = await crypto.importPrivateKey(storedPriv);
+        } catch (e) {
+          console.error("Failed to import stored private key", e);
+        }
+      }
+
+      if (!privKey) {
+        const keyPair = await crypto.generateKeyPair();
+        const pubKeyStr = await crypto.exportPublicKey(keyPair.publicKey);
+        const privKeyStr = await crypto.exportPrivateKey(keyPair.privateKey);
+
+        await api.updateUser(user.id, { publicKey: pubKeyStr });
+        localStorage.setItem(`ft_priv_${user.id}`, privKeyStr);
+        privKey = keyPair.privateKey;
+      }
+      setPrivateKey(privKey);
+    };
+    initEncryption();
+  }, [user]);
 
   // Shared Data Sync (Cross-tab)
   useEffect(() => {
@@ -560,6 +632,84 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [tasks]);
 
+  const sendMessage = useCallback(async (conversationId: string, text: string) => {
+    if (!user) return;
+    try {
+      let encryptedText = text;
+
+      // Attempt Encryption
+      const conv = conversations.find(c => c.id === conversationId);
+      if (conv && conv.type === 'DIRECT') {
+        const partnerId = conv.participants.find(p => p !== user.id);
+        const partner = allUsers.find(u => u.id === partnerId);
+        if (partner?.publicKey) {
+          encryptedText = await crypto.encryptForRecipient(text, partner.publicKey);
+        }
+      }
+
+      const msg = await api.sendMessage(conversationId, user.id, encryptedText);
+
+      // Decrypt locally before storing in state if it's our own message
+      const decrypted = privateKey ? await crypto.decryptForMe(msg.text, privateKey) : msg.text;
+      setMessages(prev => [...prev, { ...msg, text: decrypted }]);
+
+      // refresh conversations to update lastMessage
+      const convs = await api.fetchConversations();
+      setConversations(convs);
+    } catch (err: any) {
+      pushNotification(`Failed to send message: ${err.message}`, 'error');
+    }
+  }, [user, conversations, allUsers, privateKey]);
+
+  const selectConversation = useCallback(async (conv: Conversation | null) => {
+    setActiveConversation(conv);
+    if (conv) {
+      try {
+        const msgs = await api.fetchMessages(conv.id);
+        if (privateKey) {
+          const decrypted = await Promise.all(msgs.map(async (m: any) => ({
+            ...m,
+            text: await crypto.decryptForMe(m.text, privateKey)
+          })));
+          setMessages(decrypted);
+        } else {
+          setMessages(msgs || []);
+        }
+      } catch (e) {
+        setMessages([]);
+      }
+    } else {
+      setMessages([]);
+    }
+  }, [privateKey]);
+
+  const createConversation = useCallback(async (participants: string[], name?: string, type: 'DIRECT' | 'GROUP' = 'DIRECT') => {
+    try {
+      const conv = await api.createConversation(participants, name, type);
+      setConversations(prev => [conv, ...prev]);
+      return conv;
+    } catch (err: any) {
+      pushNotification(`Failed to create conversation: ${err.message}`, 'error');
+    }
+  }, []);
+
+  // Polling for new messages
+  useEffect(() => {
+    if (!user || !activeConversation) return;
+    const interval = setInterval(async () => {
+      try {
+        const msgs = await api.fetchMessages(activeConversation.id);
+        if (msgs.length !== messages.length) {
+          setMessages(msgs);
+        }
+        // Also refresh conversations for sidebar updates
+        const convs = await api.fetchConversations();
+        setConversations(convs);
+      } catch (e) { }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [user, activeConversation, messages.length]);
+
   const markNotificationsAsRead = useCallback(() => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   }, []);
@@ -568,14 +718,80 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
+  const addDoc = useCallback(async (name: string, url: string) => {
+    if (!user) return;
+    try {
+      const newDoc = await api.createResource('docs', { name, url, ownerId: user.id, sharedWith: [] });
+      setDocs(prev => [...prev, newDoc]);
+      pushNotification('Link shared successfully', 'success');
+    } catch (err: any) {
+      pushNotification(`Failed to share link: ${err.message}`, 'error');
+    }
+  }, [user]);
+
+  const shareDoc = useCallback(async (docId: string, sharedWith: string[]) => {
+    try {
+      const updated = await api.updateResource('docs', docId, { sharedWith });
+      setDocs(prev => prev.map(d => d.id === docId ? updated : d));
+      pushNotification('Access updated', 'success');
+    } catch (err: any) {
+      pushNotification(`Failed to update access: ${err.message}`, 'error');
+    }
+  }, []);
+
+  const trackTaskVisit = useCallback(async (taskId: string) => {
+    if (!user) return;
+    const history = [...(user.visitedTasks || [])];
+    const existing = history.findIndex(h => h.taskId === taskId);
+    if (existing !== -1) history.splice(existing, 1);
+    history.unshift({ taskId, visitedAt: new Date().toISOString() });
+    const limited = history.slice(0, 15);
+    await updateUser(user.id, { visitedTasks: limited });
+  }, [user, updateUser]);
+
+  const toggleBookmark = useCallback(async (resourceId: string) => {
+    if (!user) return;
+    const bookmarks = [...(user.bookmarks || [])];
+    const idx = bookmarks.indexOf(resourceId);
+    if (idx === -1) bookmarks.push(resourceId);
+    else bookmarks.splice(idx, 1);
+    await updateUser(user.id, { bookmarks });
+  }, [user, updateUser]);
+
+  const addBoost = useCallback(async (targetUserId: string, message: string) => {
+    if (!user) return;
+    const target = allUsers.find(u => u.id === targetUserId);
+    if (!target) return;
+    const newBoosts = [...(target.boosts || []), {
+      fromUserId: user.id,
+      fromUserName: user.name,
+      message,
+      createdAt: new Date().toISOString()
+    }];
+    await api.updateResource('users', targetUserId, { boosts: newBoosts });
+    pushNotification(`Boost sent to ${target.name}!`, 'success');
+  }, [user, allUsers, pushNotification]);
+
+  const saveDraft = useCallback(async (type: string, content: any) => {
+    if (!user) return;
+    const drafts = [...(user.drafts || [])];
+    const existing = drafts.findIndex(d => d.type === type);
+    if (existing !== -1) drafts[existing] = { type, content, updatedAt: new Date().toISOString() };
+    else drafts.push({ type, content, updatedAt: new Date().toISOString() });
+    await updateUser(user.id, { drafts });
+  }, [user, updateUser]);
+
   return (
     <AppContext.Provider value={{
       tasks: filteredTasks, projects: filteredProjects, clients, invoices: filteredInvoices, activities, notifications, user, isLoading, error,
-      team, invitedEmail, invitedRole, inviteToken,
+      team, allUsers, invitedEmail, invitedRole, inviteToken,
+      conversations, activeConversation, messages, docs,
       setTasks, login, signup, logout, updateTaskStatus, addTask, deleteTask, copyTask, addComment,
       approveTask, requestChanges, addProject, addClient, generateInvoice, payInvoice, updateInvoiceStatus,
       markNotificationsAsRead, dismissNotification, verifyOTP, inviteTeamMember, removeTeamMember, cancelSignup, resendOTP,
-      updateUser, requestEmailUpdate, confirmEmailUpdate
+      updateUser, requestEmailUpdate, confirmEmailUpdate,
+      sendMessage, selectConversation, createConversation, addDoc, shareDoc,
+      trackTaskVisit, toggleBookmark, addBoost, saveDraft
     }}>
       {children}
     </AppContext.Provider>

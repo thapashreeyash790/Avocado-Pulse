@@ -34,6 +34,24 @@ const userSchema = new mongoose.Schema({
     timeline: { type: Boolean, default: true },
     management: { type: Boolean, default: false }
   },
+  publicKey: String,
+  lastActive: { type: Date, default: Date.now },
+  bookmarks: { type: [String], default: [] }, // Array of resource IDs (task/project/doc)
+  drafts: [{
+    type: String, // 'task', 'comment', 'message'
+    content: Object,
+    updatedAt: { type: Date, default: Date.now }
+  }],
+  boosts: [{
+    fromUserId: String,
+    fromUserName: String,
+    message: String,
+    createdAt: { type: Date, default: Date.now }
+  }],
+  visitedTasks: [{
+    taskId: String,
+    visitedAt: { type: Date, default: Date.now }
+  }],
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -96,6 +114,51 @@ const Task = mongoose.model('Task', taskSchema);
 const Invoice = mongoose.model('Invoice', invoiceSchema);
 const Verification = mongoose.model('Verification', verificationSchema);
 
+const Conversation = mongoose.model('Conversation', new mongoose.Schema({
+  id: { type: String, unique: true },
+  name: String,
+  participants: [String],
+  type: { type: String, enum: ['DIRECT', 'GROUP'], default: 'DIRECT' },
+  lastMessage: {
+    text: String,
+    senderId: String,
+    createdAt: Date
+  },
+  updatedAt: { type: Date, default: Date.now }
+}));
+
+const Message = mongoose.model('Message', new mongoose.Schema({
+  id: { type: String, unique: true },
+  conversationId: String,
+  senderId: String,
+  text: String,
+  createdAt: { type: Date, default: Date.now }
+}));
+
+const Doc = mongoose.model('Doc', new mongoose.Schema({
+  id: { type: String, unique: true },
+  name: String,
+  url: String,
+  type: { type: String, default: 'google_file' },
+  ownerId: String,
+  sharedWith: [String], // Array of email/id
+  createdAt: { type: Date, default: Date.now }
+}));
+
+const activitySchema = new mongoose.Schema({
+  id: { type: String, unique: true },
+  userId: String,
+  userName: String,
+  userAvatar: String,
+  action: String,
+  taskId: String,
+  taskTitle: String,
+  type: { type: String, enum: ['STATUS', 'COMMENT', 'APPROVAL', 'CREATE'] },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Activity = mongoose.model('Activity', activitySchema);
+
 // Helper to get model by resource name
 const getModel = (resource) => {
   switch (resource) {
@@ -104,6 +167,10 @@ const getModel = (resource) => {
     case 'projects': return Project;
     case 'tasks': return Task;
     case 'invoices': return Invoice;
+    case 'conversations': return Conversation;
+    case 'messages': return Message;
+    case 'docs': return Doc;
+    case 'activities': return Activity;
     default: return null;
   }
 };
@@ -161,6 +228,13 @@ app.use(async (req, res, next) => {
     if (mongoose.connection.readyState !== 1) {
       return res.status(503).json({ error: 'Database connection is not ready' });
     }
+
+    // Update online status
+    const requesterId = req.headers['x-requester-id'];
+    if (requesterId) {
+      await User.findOneAndUpdate({ id: requesterId }, { lastActive: new Date() });
+    }
+
     next();
   } catch (err) {
     console.error('Database connection middleware error:', err.message);
@@ -267,9 +341,36 @@ app.get('/api/:resource', async (req, res) => {
       }
     }
   }
+  // Chat filtering
+  if (resource === 'conversations' && requesterId) {
+    query.participants = requesterId;
+  }
+  if (resource === 'messages' && requesterId) {
+    const { conversationId } = req.query;
+    if (!conversationId) return res.status(400).json({ error: 'conversationId required' });
+    const conv = await Conversation.findOne({ id: conversationId, participants: requesterId });
+    if (!conv) return res.status(403).json({ error: 'Not a member of this conversation' });
+    query.conversationId = conversationId;
+  }
 
-  const items = await Model.find(query);
-  res.json(items);
+  // Doc filtering
+  if (resource === 'docs' && requesterId && requesterRole !== 'ADMIN') {
+    const user = await User.findOne({ id: requesterId });
+    const userEmail = user?.email || '';
+    query.$or = [
+      { ownerId: requesterId },
+      { sharedWith: requesterId },
+      { sharedWith: userEmail }
+    ];
+  }
+
+  try {
+    const sort = resource === 'messages' ? { createdAt: 1 } : { updatedAt: -1 };
+    const items = await Model.find(query).sort(sort);
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Get one
@@ -393,6 +494,22 @@ app.post('/api/:resource', async (req, res) => {
     // ... existing logic ...
   }
 
+  // Chat special logic
+  if (resource === 'messages') {
+    const { conversationId, senderId, text } = payload;
+    const conv = await Conversation.findOne({ id: conversationId, participants: senderId });
+    if (!conv) return res.status(403).json({ error: 'Not authorized to send messages here' });
+
+    // Update conversation last activity
+    await Conversation.findOneAndUpdate(
+      { id: conversationId },
+      {
+        lastMessage: { text, senderId, createdAt: new Date() },
+        updatedAt: new Date()
+      }
+    );
+  }
+
   try {
     const created = await Model.create(payload);
     res.status(201).json(created);
@@ -417,7 +534,7 @@ app.post('/api/team/invite', async (req, res) => {
     role,
     password: 'PENDING_INVITE',
     verified: false,
-    permissions: permissions || { billing: true, tasks: true, projects: true, management: false }
+    permissions: permissions || { billing: true, timeline: true, projects: true, management: false }
   });
 
   // Use the same Verification logic but for an invite

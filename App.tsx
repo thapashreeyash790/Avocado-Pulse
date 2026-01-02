@@ -11,6 +11,9 @@ import LoginView from './components/LoginView';
 import VerifyEmailView from './components/VerifyEmailView';
 import ResetRequestView from './components/ResetRequestView';
 import ResetPasswordView from './components/ResetPasswordView';
+import ChatView from './components/ChatView';
+import DocsView from './components/DocsView';
+import MyStuffView from './components/MyStuffView';
 import { AppProvider, useApp } from './store/AppContext';
 import { ICONS } from './constants';
 
@@ -19,7 +22,7 @@ const AuthenticatedApp: React.FC = () => {
   const { user } = useApp();
   console.log('[AuthenticatedApp] user:', user, typeof user);
   if (typeof user === 'undefined') {
-    return <div style={{color:'red',padding:20}}>Critical error: user is undefined. Please check AppContext and localStorage. <br/>Try clearing browser storage and reloading.</div>;
+    return <div style={{ color: 'red', padding: 20 }}>Critical error: user is undefined. Please check AppContext and localStorage. <br />Try clearing browser storage and reloading.</div>;
   }
   if (!user) {
     return <LoginView />;
@@ -34,6 +37,9 @@ const AuthenticatedApp: React.FC = () => {
         <Route path="timeline" element={<TimelineView />} />
         <Route path="management" element={<ManagementView />} />
         <Route path="sales" element={<SalesView />} />
+        <Route path="chat" element={<ChatView />} />
+        <Route path="docs" element={<DocsView />} />
+        <Route path="mystuff" element={<MyStuffView />} />
         <Route path="team" element={
           <div className="p-8 flex items-center justify-center h-full">
             <div className="text-center max-w-sm">

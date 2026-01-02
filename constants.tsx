@@ -1,12 +1,12 @@
 
 import React from 'react';
-import { 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  Users, 
-  Calendar, 
-  MessageSquare, 
+import {
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Users,
+  Calendar,
+  MessageSquare,
   Paperclip,
   TrendingUp,
   LayoutDashboard,
@@ -17,7 +17,18 @@ import {
   Plus,
   ArrowRight,
   MoreVertical,
-  Check
+  Check,
+  FileText,
+  UserPlus,
+  Bookmark,
+  Star,
+  Edit3,
+  Zap,
+  History,
+  ListTodo,
+  Archive,
+  Home,
+  Activity
 } from 'lucide-react';
 
 export const ICONS = {
@@ -37,7 +48,18 @@ export const ICONS = {
   Plus,
   ArrowRight,
   MoreVertical,
-  Check
+  Check,
+  FileText,
+  UserPlus,
+  Bookmark,
+  Star,
+  Edit3,
+  Zap,
+  History,
+  ListTodo,
+  Archive,
+  Home,
+  Activity
 };
 
 export const PRIORITY_COLORS = {

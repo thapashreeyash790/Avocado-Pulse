@@ -35,12 +35,51 @@ export interface User {
   email: string;
   verified?: boolean;
   accessibleProjects?: string[];
+  publicKey?: string;
+  lastActive?: string;
   permissions?: {
     billing: boolean;
     projects: boolean;
     timeline: boolean;
     management: boolean;
   };
+  bookmarks?: string[];
+  drafts?: {
+    type: string;
+    content: any;
+    updatedAt: string;
+  }[];
+  boosts?: {
+    fromUserId: string;
+    fromUserName: string;
+    message: string;
+    createdAt: string;
+  }[];
+  visitedTasks?: {
+    taskId: string;
+    visitedAt: string;
+  }[];
+}
+
+export interface Conversation {
+  id: string;
+  name?: string;
+  participants: string[];
+  type: 'DIRECT' | 'GROUP';
+  lastMessage?: {
+    text: string;
+    senderId: string;
+    createdAt: string;
+  };
+  updatedAt: string;
+}
+
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  text: string;
+  createdAt: string;
 }
 
 export interface ClientProfile {
@@ -120,4 +159,14 @@ export interface Task {
   approvalStatus?: ApprovalStatus;
   cost?: number;
   files: string[];
+}
+
+export interface Doc {
+  id: string;
+  name: string;
+  url: string;
+  type: 'google_file';
+  ownerId: string;
+  sharedWith: string[]; // email or id
+  createdAt: string;
 }
