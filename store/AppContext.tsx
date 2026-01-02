@@ -217,8 +217,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const generateInvoice = async (projectId: string) => {
+    console.log('[generateInvoice] Request for project:', projectId);
     const project = projects.find(p => p.id === projectId);
-    if (!project) return;
+    if (!project) {
+      console.error('[generateInvoice] Project not found in state:', projectId);
+      pushNotification('Error: Project data not found. Try refreshing.', 'error');
+      return;
+    }
     try {
       const payload = {
         projectId,
@@ -228,6 +233,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         date: new Date().toISOString(),
         dueDate: new Date(Date.now() + 1209600000).toISOString()
       };
+      console.log('[generateInvoice] Creating payload:', payload);
       const created = await api.createInvoice(payload);
       setInvoices(prev => [...prev, created]);
       pushNotification(`Invoice generated for ${project.name}`, 'success');
