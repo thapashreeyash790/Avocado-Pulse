@@ -91,7 +91,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [user]);
 
-  useEffect(() => { loadAllData(); }, [loadAllData]);
+  useEffect(() => {
+    loadAllData();
+    // Poll for real-time updates every 3 seconds
+    const intervalId = setInterval(() => {
+      // Poll even if hidden to ensure data is fresh when returning
+      if (user) {
+        loadAllData();
+      }
+    }, 3000);
+    return () => clearInterval(intervalId);
+  }, [loadAllData, user]);
 
   // Shared Data Sync (Cross-tab)
   useEffect(() => {

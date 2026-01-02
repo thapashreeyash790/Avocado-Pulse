@@ -6,7 +6,11 @@ const API_BASE = (import.meta as any).env?.VITE_API_URL || '';
 
 async function safeFetch(path: string, options?: RequestInit) {
   try {
-    const res = await fetch(`${API_BASE}${path}`, { headers: { 'Content-Type': 'application/json' }, ...options });
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      ...options
+    });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(text || res.statusText);
