@@ -34,7 +34,7 @@ export const api = {
       if (users.find((u: any) => u.email.toLowerCase() === email.toLowerCase())) {
         throw new Error('An account with this email already exists.');
       }
-      const newUser = { id: Math.random().toString(36).substr(2,9), name, email, password, role, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`, verified: false };
+      const newUser = { id: Math.random().toString(36).substr(2, 9), name, email, password, role, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`, verified: false };
       users.push(newUser);
       localStorage.setItem(key, JSON.stringify(users));
       const { password: _p, ...userSafe } = newUser as any;
