@@ -5,11 +5,20 @@ import { User, UserRole, Task, Project, ClientProfile, Invoice } from '../types'
 const API_BASE = (import.meta as any).env?.VITE_API_URL || '';
 
 async function safeFetch(path: string, options?: RequestInit) {
+  const currentUserRaw = localStorage.getItem('avocado_current_user');
+  const currentUser = currentUserRaw ? JSON.parse(currentUserRaw) : null;
+
+  const headers: any = { 'Content-Type': 'application/json' };
+  if (currentUser) {
+    headers['x-requester-id'] = currentUser.id;
+    headers['x-requester-role'] = currentUser.role;
+  }
+
   try {
     const res = await fetch(`${API_BASE}${path}`, {
-      headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
-      ...options
+      ...options,
+      headers: { ...headers, ...options?.headers },
+      cache: 'no-store'
     });
     if (!res.ok) {
       const text = await res.text();
@@ -45,8 +54,8 @@ export const api = {
     }
   },
 
-  async inviteTeamMember(name: string, email: string): Promise<any> {
-    return await safeFetch('/api/team/invite', { method: 'POST', body: JSON.stringify({ name, email }) });
+  async inviteTeamMember(name: string, email: string, role: string, permissions?: any): Promise<any> {
+    return await safeFetch('/api/team/invite', { method: 'POST', body: JSON.stringify({ name, email, role, permissions }) });
   },
 
   async login(email: string, password: string): Promise<User> {
@@ -89,6 +98,18 @@ export const api = {
     return user;
   },
 
+  async resendOtp(email: string): Promise<void> {
+    await safeFetch('/api/auth/resend', { method: 'POST', body: JSON.stringify({ email }) });
+  },
+
+  async requestEmailUpdate(userId: string, newEmail: string): Promise<void> {
+    await safeFetch('/api/auth/update-email-request', { method: 'POST', body: JSON.stringify({ userId, newEmail }) });
+  },
+
+  async confirmEmailUpdate(token: string): Promise<any> {
+    return await safeFetch('/api/auth/update-email-confirm', { method: 'POST', body: JSON.stringify({ token }) });
+  },
+
   // Generic resource helpers
   async fetchResource(resource: string): Promise<any[]> {
     const data = await safeFetch(`/api/${resource}`);
@@ -114,6 +135,7 @@ export const api = {
   async fetchProjects(): Promise<any[]> { return this.fetchResource('projects'); },
   async fetchClients(): Promise<any[]> { return this.fetchResource('clients'); },
   async fetchInvoices(): Promise<any[]> { return this.fetchResource('invoices'); },
+  async fetchUsers(): Promise<any[]> { return this.fetchResource('users'); },
 
   async createProject(project: Omit<Project, 'id'>) { return this.createResource('projects', project); },
   async createClient(client: Omit<ClientProfile, 'id'>) { return this.createResource('clients', client); },

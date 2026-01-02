@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { ICONS } from '../constants';
 import { useApp } from '../store/AppContext';
-import { UserRole, AppNotification } from '../types';
+import { UserRole, AppNotification, isInternalRole } from '../types';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -42,10 +42,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         <nav className="flex-1 px-4 space-y-1">
           <NavItem to="/" icon={<ICONS.LayoutDashboard />} label="Pulse" onClick={() => setSidebarOpen(false)} />
-          <NavItem to="/board" icon={<ICONS.Trello />} label="Projects" onClick={() => setSidebarOpen(false)} />
-          <NavItem to="/timeline" icon={<ICONS.Calendar />} label="Timeline" onClick={() => setSidebarOpen(false)} />
-          <NavItem to="/sales" icon={<ICONS.TrendingUp />} label="Billing" onClick={() => setSidebarOpen(false)} />
-          {(user.role === UserRole.TEAM || user.role === UserRole.ADMIN) && (
+
+          {(user.role === UserRole.ADMIN || user.permissions?.projects !== false) && (
+            <NavItem to="/board" icon={<ICONS.Trello />} label="Projects" onClick={() => setSidebarOpen(false)} />
+          )}
+
+          {(user.role === UserRole.ADMIN || user.permissions?.timeline !== false) && (
+            <NavItem to="/timeline" icon={<ICONS.Calendar />} label="Timeline" onClick={() => setSidebarOpen(false)} />
+          )}
+
+          {(user.role === UserRole.ADMIN || user.permissions?.billing !== false) && (
+            <NavItem to="/sales" icon={<ICONS.TrendingUp />} label="Billing" onClick={() => setSidebarOpen(false)} />
+          )}
+
+          {isInternalRole(user.role) && (user.role === UserRole.ADMIN || user.permissions?.management === true) && (
             <NavItem to="/management" icon={<ICONS.Settings />} label="Workspace" onClick={() => setSidebarOpen(false)} />
           )}
         </nav>
@@ -69,23 +79,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </button>
           <div className="text-xs font-black text-slate-400 uppercase tracking-widest">Avocado Project manager Shared Workspace</div>
           <div className="relative" ref={notificationRef}>
-             <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 hover:bg-slate-50 rounded-full transition-colors">
-               <ICONS.Bell className={`w-5 h-5 ${unreadCount > 0 ? 'text-emerald-600' : 'text-slate-400'}`} />
-               {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full border-2 border-white"></span>}
-             </button>
-             {showNotifications && (
-               <div className="absolute right-0 top-12 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                 <div className="p-4 border-b bg-slate-50 font-bold text-xs uppercase text-slate-500 tracking-wider">Recent Alerts</div>
-                 <div className="max-h-64 overflow-y-auto custom-scrollbar">
-                    {notifications.length > 0 ? notifications.map(n => (
-                      <div key={n.id} className="p-4 border-b text-xs font-medium text-slate-800 hover:bg-slate-50 transition-colors">{n.message}</div>
-                    )) : <div className="p-8 text-center text-slate-400 text-xs italic">All clear!</div>}
-                 </div>
-                 {notifications.length > 0 && (
-                   <button onClick={markNotificationsAsRead} className="w-full p-3 text-[10px] font-bold text-emerald-600 uppercase hover:bg-emerald-50 border-t">Mark all as read</button>
-                 )}
-               </div>
-             )}
+            <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 hover:bg-slate-50 rounded-full transition-colors">
+              <ICONS.Bell className={`w-5 h-5 ${unreadCount > 0 ? 'text-emerald-600' : 'text-slate-400'}`} />
+              {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full border-2 border-white"></span>}
+            </button>
+            {showNotifications && (
+              <div className="absolute right-0 top-12 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                <div className="p-4 border-b bg-slate-50 font-bold text-xs uppercase text-slate-500 tracking-wider">Recent Alerts</div>
+                <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                  {notifications.length > 0 ? notifications.map(n => (
+                    <div key={n.id} className="p-4 border-b text-xs font-medium text-slate-800 hover:bg-slate-50 transition-colors">{n.message}</div>
+                  )) : <div className="p-8 text-center text-slate-400 text-xs italic">All clear!</div>}
+                </div>
+                {notifications.length > 0 && (
+                  <button onClick={markNotificationsAsRead} className="w-full p-3 text-[10px] font-bold text-emerald-600 uppercase hover:bg-emerald-50 border-t">Mark all as read</button>
+                )}
+              </div>
+            )}
           </div>
         </header>
         <div className="flex-1 overflow-auto custom-scrollbar">{children}</div>

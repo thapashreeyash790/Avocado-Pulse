@@ -23,12 +23,24 @@ export enum ApprovalStatus {
   CHANGES_REQUESTED = 'CHANGES_REQUESTED'
 }
 
+// Helper to check if a custom role is internal
+export const isInternalRole = (role: string) => role !== UserRole.CLIENT;
+export const isAdminRole = (role: string) => role === UserRole.ADMIN;
+
 export interface User {
   id: string;
   name: string;
-  role: UserRole;
+  role: string; // Allow any string for job titles
   avatar: string;
   email: string;
+  verified?: boolean;
+  accessibleProjects?: string[];
+  permissions?: {
+    billing: boolean;
+    projects: boolean;
+    timeline: boolean;
+    management: boolean;
+  };
 }
 
 export interface ClientProfile {

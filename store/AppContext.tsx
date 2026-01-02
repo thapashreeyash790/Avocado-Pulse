@@ -31,8 +31,18 @@ interface AppContextType {
   updateInvoiceStatus: (invoiceId: string, status: Invoice['status']) => Promise<void>;
   markNotificationsAsRead: () => void;
   dismissNotification: (id: string) => void;
-  verifyOTP: (token: string) => Promise<void>;
-  inviteTeamMember: (name: string, email: string) => Promise<void>;
+  verifyOTP: (token: string) => Promise<boolean>;
+  updateUser: (id: string, payload: Partial<User>) => Promise<void>;
+  requestEmailUpdate: (newEmail: string) => Promise<void>;
+  confirmEmailUpdate: (token: string) => Promise<void>;
+  inviteTeamMember: (name: string, email: string, role: string) => Promise<void>;
+  removeTeamMember: (id: string) => Promise<void>;
+  cancelSignup: (email: string) => Promise<void>;
+  resendOTP: (email: string) => Promise<void>;
+  team: User[];
+  invitedEmail: string | null;
+  invitedRole: string | null;
+  inviteToken: string | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -63,23 +73,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [team, setTeam] = useState<User[]>([]);
+  const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
+  const [invitedRole, setInvitedRole] = useState<string | null>(null);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const pushNotification = useCallback((message: string, type: AppNotification['type'] = 'info') => {
+    const newNotif: AppNotification = {
+      id: Math.random().toString(36).substr(2, 9),
+      message,
+      type,
+      createdAt: new Date().toISOString(),
+      read: false
+    };
+    setNotifications(prev => [newNotif, ...prev].slice(0, 20));
+  }, []);
+
+  const logActivity = useCallback((action: string, type: Activity['type'], taskId?: string, taskTitle?: string) => {
+    if (!user) return;
+    const newActivity: Activity = {
+      id: Math.random().toString(36).substr(2, 9),
+      userId: user.id,
+      userName: user.name,
+      userAvatar: user.avatar,
+      action,
+      type,
+      taskId,
+      taskTitle,
+      createdAt: new Date().toISOString()
+    };
+    setActivities(prev => [newActivity, ...prev].slice(0, 50));
+  }, [user]);
+
   const loadAllData = useCallback(async () => {
     if (!user) return;
     try {
-      const [fProjects, fClients, fInvoices, fTasks] = await Promise.all([
+      const [fProjects, fClients, fInvoices, fTasks, fUsers] = await Promise.all([ // Modified
         api.fetchProjects(),
         api.fetchClients(),
         api.fetchInvoices(),
-        api.fetchTasks()
+        api.fetchTasks(),
+        api.fetchUsers() // Added
       ]);
       setProjects(fProjects || []);
       setClients(fClients || []);
       setInvoices(fInvoices || []);
       setTasks(fTasks || []);
+      setTeam(fUsers.filter((u: any) => u.role !== 'CLIENT') || []); // include all job titles
     } catch (err: any) {
       console.error('Load failed:', err);
       pushNotification(`Connection failed: ${err.message || err}`, 'error');
@@ -119,6 +162,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [loadAllData]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('invite') === 'true') {
+      const email = params.get('email');
+      const token = params.get('token');
+      const role = params.get('role');
+      if (email && token) {
+        setInvitedEmail(email);
+        setInvitedRole(role);
+        setInviteToken(token);
+        // Clear params from URL for aesthetic
+        window.history.replaceState({}, '', window.location.pathname);
+        pushNotification(`Invitation detected for ${email}. Please complete your registration.`, 'info');
+      }
+    }
+  }, [pushNotification]);
+
+  useEffect(() => {
     if (user) {
       // write cache to localStorage as a fallback cache
       localStorage.setItem('avocado_projects', JSON.stringify(projects));
@@ -127,33 +187,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('avocado_activities', JSON.stringify(activities));
     }
   }, [tasks, projects, clients, invoices, activities, user]);
-
-  const pushNotification = useCallback((message: string, type: AppNotification['type'] = 'info') => {
-    const newNotif: AppNotification = {
-      id: Math.random().toString(36).substr(2, 9),
-      message,
-      type,
-      createdAt: new Date().toISOString(),
-      read: false
-    };
-    setNotifications(prev => [newNotif, ...prev].slice(0, 20));
-  }, []);
-
-  const logActivity = useCallback((action: string, type: Activity['type'], taskId?: string, taskTitle?: string) => {
-    if (!user) return;
-    const newActivity: Activity = {
-      id: Math.random().toString(36).substr(2, 9),
-      userId: user.id,
-      userName: user.name,
-      userAvatar: user.avatar,
-      action,
-      type,
-      taskId,
-      taskTitle,
-      createdAt: new Date().toISOString()
-    };
-    setActivities(prev => [newActivity, ...prev].slice(0, 50));
-  }, [user]);
 
   const login = async (email: string, password: string) => {
     setError(null);
@@ -200,29 +233,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const cancelSignup = async (email: string) => {
+    try {
+      await fetch('/api/auth/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+    } catch (e) {
+      console.error('Failed to cancel signup on server', e);
+    }
+  };
+
+  const resendOTP = async (email: string) => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      await api.resendOtp(email);
+      pushNotification('New verification code sent to your email.', 'success');
+    } catch (err: any) {
+      const msg = err.message || 'Failed to resend OTP';
+      setError(msg);
+      pushNotification(msg, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const verifyOTP = async (token: string) => {
     setError(null);
     setIsLoading(true);
     try {
-      const user = await api.verifyEmail(token);
-      setUser(user);
-      localStorage.setItem('avocado_current_user', JSON.stringify(user));
-      pushNotification('Email verified! You are now logged in.', 'success');
+      await api.verifyEmail(token);
+      pushNotification('Email verified! Please sign in with your credentials.', 'success');
+      return true; // Indicate success for redirection
     } catch (err: any) {
-      setError(err.message);
+      const msg = err.message || 'Verification failed';
+      setError(msg);
+      pushNotification(msg, 'error');
       throw err;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const inviteTeamMember = async (name: string, email: string) => {
+  const inviteTeamMember = async (name: string, email: string, role: string, permissions?: any) => {
     try {
-      await api.inviteTeamMember(name, email);
+      await api.inviteTeamMember(name, email, role, permissions);
       pushNotification(`Invitation sent to ${email}`, 'success');
       logActivity(`invited ${name} to the team`, 'CREATE');
     } catch (err: any) {
       pushNotification(`Failed to invite: ${err.message}`, 'error');
+    }
+  };
+
+  const removeTeamMember = async (id: string) => {
+    if (!window.confirm('Are you sure you want to remove this team member?')) return;
+    try {
+      await api.deleteResource('users', id);
+      setTeam(prev => prev.filter(m => m.id !== id));
+      pushNotification('Member removed from workspace', 'success');
+    } catch (err: any) {
+      pushNotification(`Removal failed: ${err.message}`, 'error');
     }
   };
 
@@ -231,6 +303,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTasks([]);
     setNotifications([]);
     localStorage.removeItem('avocado_current_user');
+  };
+
+  const updateUser = async (id: string, payload: Partial<User>) => {
+    setIsLoading(true);
+    try {
+      const updated = await api.updateResource('users', id, payload);
+      if (user?.id === id) {
+        const newUser = { ...user, ...updated };
+        setUser(newUser);
+        localStorage.setItem('avocado_current_user', JSON.stringify(newUser));
+      }
+      setTeam(prev => prev.map(m => m.id === id ? { ...m, ...updated } : m));
+      pushNotification('User updated successfully', 'success');
+    } catch (err: any) {
+      pushNotification(`Update failed: ${err.message}`, 'error');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const requestEmailUpdate = async (newEmail: string) => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      await api.requestEmailUpdate(user.id, newEmail);
+      pushNotification('Verification code sent to your new email', 'success');
+    } catch (err: any) {
+      pushNotification(`Failed: ${err.message}`, 'error');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const confirmEmailUpdate = async (token: string) => {
+    setIsLoading(true);
+    try {
+      const res = await api.confirmEmailUpdate(token);
+      if (user) {
+        const newUser = { ...user, email: res.email };
+        setUser(newUser);
+        localStorage.setItem('avocado_current_user', JSON.stringify(newUser));
+      }
+      setTeam(prev => prev.map(m => m.id === user?.id ? { ...m, email: res.email } : m));
+      pushNotification('Email updated successfully', 'success');
+    } catch (err: any) {
+      pushNotification(`Confirmation failed: ${err.message}`, 'error');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const addProject = async (project: Omit<Project, 'id'>) => {
@@ -447,9 +571,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider value={{
       tasks: filteredTasks, projects: filteredProjects, clients, invoices: filteredInvoices, activities, notifications, user, isLoading, error,
+      team, invitedEmail, invitedRole, inviteToken,
       setTasks, login, signup, logout, updateTaskStatus, addTask, deleteTask, copyTask, addComment,
       approveTask, requestChanges, addProject, addClient, generateInvoice, payInvoice, updateInvoiceStatus,
-      markNotificationsAsRead, dismissNotification, verifyOTP, inviteTeamMember
+      markNotificationsAsRead, dismissNotification, verifyOTP, inviteTeamMember, removeTeamMember, cancelSignup, resendOTP,
+      updateUser, requestEmailUpdate, confirmEmailUpdate
     }}>
       {children}
     </AppContext.Provider>

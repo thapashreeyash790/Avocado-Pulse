@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { UserRole } from '../types';
 import { ICONS } from '../constants';
 
 const LoginView: React.FC = () => {
-  const { login, signup, isLoading, error, verifyOTP } = useApp();
+  const { login, signup, verifyOTP, cancelSignup, resendOTP, error, isLoading, invitedEmail, invitedRole, inviteToken } = useApp();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -14,17 +14,41 @@ const LoginView: React.FC = () => {
   // OTP State
   const [isVerifying, setIsVerifying] = useState(false);
   const [otp, setOtp] = useState('');
+  const [resendTimer, setResendTimer] = useState(0);
+
+  useEffect(() => {
+    if (invitedEmail) {
+      setEmail(invitedEmail);
+      setIsLogin(false); // Go to signup
+      if (invitedRole) setRole(invitedRole as any);
+    }
+  }, [invitedEmail, invitedRole]);
+
+  useEffect(() => {
+    let interval: any;
+    if (isVerifying && resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isVerifying, resendTimer]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || (!isLogin && !name) || (!isVerifying && !password)) {
-      // Allow empty password if verifying OTP (it's not used then)
       if (!isVerifying) return;
     }
 
     try {
       if (isVerifying) {
-        await verifyOTP(otp);
+        const success = await verifyOTP(otp);
+        if (success) {
+          setIsVerifying(false);
+          setIsLogin(true);
+          setPassword('');
+          setOtp('');
+        }
         return;
       }
 
@@ -34,12 +58,25 @@ const LoginView: React.FC = () => {
         const res = await signup(email, password, role, name);
         if (res && res.requiresOtp) {
           setIsVerifying(true);
+          setResendTimer(50); // Start 50s countdown
           return;
         }
       }
-    } catch (err) {
-      // Error handled in context
+    } catch (err) { }
+  };
+
+  const handleResend = () => {
+    if (resendTimer === 0) {
+      resendOTP(email);
+      setResendTimer(50);
     }
+  };
+
+  const handleCancelVerification = () => {
+    if (email) cancelSignup(email);
+    setIsVerifying(false);
+    setOtp('');
+    setResendTimer(0);
   };
 
   return (
@@ -72,11 +109,19 @@ const LoginView: React.FC = () => {
             <input
               type="email"
               value={email}
+              readOnly={!!invitedEmail}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+              className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${invitedEmail ? 'opacity-50 cursor-not-allowed' : ''}`}
               placeholder="name@company.com"
             />
           </div>
+
+          {/* If invited, show a badge */}
+          {invitedEmail && !isVerifying && (
+            <div className="bg-green-50 text-green-700 text-[10px] font-black uppercase p-2 rounded-lg border border-green-100 flex items-center gap-2">
+              <span className="text-sm">✉️</span> Invited Team Member
+            </div>
+          )}
 
           {/* OTP Input */}
           {isVerifying && (
@@ -122,13 +167,23 @@ const LoginView: React.FC = () => {
               </div>
 
               {!isLogin && (
-                <div className="flex gap-4 pt-2">
-                  <button type="button" onClick={() => setRole(UserRole.TEAM)} className={`flex-1 py-3 rounded-xl text-xs font-bold border transition-all ${role === UserRole.TEAM ? 'bg-green-50 border-green-500 text-green-700 scale-105 shadow-sm' : 'border-slate-200 text-slate-400 hover:bg-slate-50'}`}>
-                    Team Member
-                  </button>
-                  <button type="button" onClick={() => setRole(UserRole.CLIENT)} className={`flex-1 py-3 rounded-xl text-xs font-bold border transition-all ${role === UserRole.CLIENT ? 'bg-blue-50 border-blue-500 text-blue-700 scale-105 shadow-sm' : 'border-slate-200 text-slate-400 hover:bg-slate-50'}`}>
-                    Client Access
-                  </button>
+                <div className="animate-in slide-in-from-top duration-300 delay-150">
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1 ml-1">Your Job Role / Title</label>
+                  <input
+                    type="text"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all mb-2"
+                    placeholder="e.g. Writer, Designer, Developer"
+                  />
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button type="button" onClick={() => setRole('Writer' as any)} className={`text-[10px] px-2 py-1 rounded-lg border font-bold transition-all ${role === 'Writer' ? 'bg-green-50 border-green-500 text-green-700' : 'bg-white border-slate-200 text-slate-400'}`}>Writer</button>
+                    <button type="button" onClick={() => setRole('Developer' as any)} className={`text-[10px] px-2 py-1 rounded-lg border font-bold transition-all ${role === 'Developer' ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-white border-slate-200 text-slate-400'}`}>Developer</button>
+                    <button type="button" onClick={() => setRole('Designer' as any)} className={`text-[10px] px-2 py-1 rounded-lg border font-bold transition-all ${role === 'Designer' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-slate-200 text-slate-400'}`}>Designer</button>
+                    {!invitedEmail && (
+                      <button type="button" onClick={() => setRole(UserRole.CLIENT)} className={`text-[10px] px-2 py-1 rounded-lg border font-bold transition-all ${role === UserRole.CLIENT ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-slate-200 text-slate-400'}`}>Client Access</button>
+                    )}
+                  </div>
                 </div>
               )}
             </>
@@ -157,9 +212,16 @@ const LoginView: React.FC = () => {
         )}
 
         {isVerifying && (
-          <div className="mt-8 text-center">
+          <div className="mt-8 flex flex-col items-center gap-4">
             <button
-              onClick={() => setIsVerifying(false)}
+              onClick={handleResend}
+              disabled={resendTimer > 0 || isLoading}
+              className={`text-xs font-bold transition-colors ${resendTimer > 0 ? 'text-slate-300 cursor-not-allowed' : 'text-green-600 hover:text-green-700'}`}
+            >
+              {resendTimer > 0 ? `Resend Code in ${resendTimer}s` : 'Resend Verification Code'}
+            </button>
+            <button
+              onClick={handleCancelVerification}
               className="text-xs font-bold text-slate-400 hover:text-red-600 transition-colors"
             >
               Cancel Verification
