@@ -38,7 +38,7 @@ const clientSchema = new mongoose.Schema({
 const projectSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: String,
-  clientId: { type: String, required: true }, // Client email
+  clientId: { type: String }, // Client email (optional)
   budget: Number,
   currency: String,
   startDate: String,

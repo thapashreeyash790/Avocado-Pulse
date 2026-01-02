@@ -81,15 +81,15 @@ const ClientModal = ({ onClose, onSave }: any) => {
         <div className="space-y-4">
           <div>
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Full Name</label>
-            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g. Jane Doe" value={data.name} onChange={e => setData({...data, name: e.target.value})} />
+            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g. Jane Doe" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
           </div>
           <div>
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Email</label>
-            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black outline-none focus:ring-2 focus:ring-green-500" placeholder="jane@company.com" value={data.email} onChange={e => setData({...data, email: e.target.value})} />
+            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black outline-none focus:ring-2 focus:ring-green-500" placeholder="jane@company.com" value={data.email} onChange={e => setData({ ...data, email: e.target.value })} />
           </div>
           <div>
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Company</label>
-            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black outline-none focus:ring-2 focus:ring-green-500" placeholder="Acme Inc" value={data.company} onChange={e => setData({...data, company: e.target.value})} />
+            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black outline-none focus:ring-2 focus:ring-green-500" placeholder="Acme Inc" value={data.company} onChange={e => setData({ ...data, company: e.target.value })} />
           </div>
           <div className="flex gap-3 pt-6">
             <button onClick={onClose} className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm">Cancel</button>
@@ -103,7 +103,7 @@ const ClientModal = ({ onClose, onSave }: any) => {
 
 const ProjectModal = ({ clients, onClose, onSave }: any) => {
   const [data, setData] = useState({ name: '', clientId: '', budget: 1000, currency: 'NPR', startDate: '', endDate: '' });
-  
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
@@ -112,11 +112,11 @@ const ProjectModal = ({ clients, onClose, onSave }: any) => {
         <div className="space-y-4">
           <div>
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Project Title</label>
-            <input className="w-full p-4 bg-white text-black border border-slate-200 rounded-2xl font-bold text-sm" value={data.name} onChange={e => setData({...data, name: e.target.value})} />
+            <input className="w-full p-4 bg-white text-black border border-slate-200 rounded-2xl font-bold text-sm" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
           </div>
           <div>
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Link Client</label>
-            <select className="w-full p-4 bg-white text-black border border-slate-200 rounded-2xl font-bold text-sm" value={data.clientId} onChange={e => setData({...data, clientId: e.target.value})}>
+            <select className="w-full p-4 bg-white text-black border border-slate-200 rounded-2xl font-bold text-sm" value={data.clientId} onChange={e => setData({ ...data, clientId: e.target.value })}>
               <option value="">Select Client...</option>
               {clients.map((c: any) => <option key={c.id} value={c.email}>{c.name} ({c.company})</option>)}
             </select>
@@ -124,11 +124,11 @@ const ProjectModal = ({ clients, onClose, onSave }: any) => {
           <div className="flex gap-4">
             <div className="flex-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Budget</label>
-              <input type="number" className="w-full p-4 bg-white text-black border border-slate-200 rounded-2xl font-bold text-sm" value={data.budget} onChange={e => setData({...data, budget: Number(e.target.value)})} />
+              <input type="number" className="w-full p-4 bg-white text-black border border-slate-200 rounded-2xl font-bold text-sm" value={data.budget} onChange={e => setData({ ...data, budget: Number(e.target.value) })} />
             </div>
             <div className="w-32">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Curr</label>
-              <select className="w-full p-4 bg-white text-black border border-slate-200 rounded-2xl font-bold text-sm" value={data.currency} onChange={e => setData({...data, currency: e.target.value})}>
+              <select className="w-full p-4 bg-white text-black border border-slate-200 rounded-2xl font-bold text-sm" value={data.currency} onChange={e => setData({ ...data, currency: e.target.value })}>
                 <option value="NPR">NPR</option>
                 <option value="USD">USD</option>
               </select>
@@ -136,7 +136,7 @@ const ProjectModal = ({ clients, onClose, onSave }: any) => {
           </div>
           <div className="flex gap-3 pt-6">
             <button onClick={onClose} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-sm">Cancel</button>
-            <button onClick={() => { onSave(data); onClose(); }} className="flex-1 py-4 bg-green-600 text-white rounded-2xl font-bold text-sm">Create Project</button>
+            <button onClick={() => { onSave(data); onClose(); }} disabled={!data.name} className={`flex-1 py-4 bg-green-600 text-white rounded-2xl font-bold text-sm ${!data.name ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-700'}`}>Create Project</button>
           </div>
         </div>
       </div>

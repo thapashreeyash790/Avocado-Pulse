@@ -199,7 +199,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // fallback to local-only project when backend is unreachable
       const fallback: Project = { ...project, id: Math.random().toString(36).substr(2, 9) };
       setProjects(prev => [...prev, fallback]);
-      pushNotification(`Created project locally (offline): ${fallback.name}`, 'info');
+      pushNotification(`Sync failed: Project created locally only.`, 'warning');
       logActivity(`created project "${fallback.name}" (local)`, 'CREATE');
     }
   };
