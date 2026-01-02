@@ -253,6 +253,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (user) {
       // write cache to localStorage as a fallback cache
+      localStorage.setItem('avocado_tasks', JSON.stringify(tasks));
       localStorage.setItem('avocado_projects', JSON.stringify(projects));
       localStorage.setItem('avocado_clients', JSON.stringify(clients));
       localStorage.setItem('avocado_invoices', JSON.stringify(invoices));
