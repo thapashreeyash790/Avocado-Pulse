@@ -109,8 +109,10 @@ const getModel = (resource) => {
 };
 
 // --- Connection Logic (Cached for Serverless) ---
+let cachedPromise = null;
 const connectDB = async () => {
   if (mongoose.connection.readyState === 1) return;
+  if (cachedPromise) return cachedPromise;
 
   if (!process.env.MONGODB_URI && process.env.NODE_ENV === 'production') {
     throw new Error('MONGODB_URI is missing in production environment');
@@ -120,10 +122,11 @@ const connectDB = async () => {
 
   try {
     console.log('Attempting to connect to MongoDB...');
-    await mongoose.connect(uri, {
-      bufferCommands: false,
-      serverSelectionTimeoutMS: 10000 // Increased to 10s for slower deployment environments
+    cachedPromise = mongoose.connect(uri, {
+      bufferCommands: true,
+      serverSelectionTimeoutMS: 15000
     });
+    await cachedPromise;
     console.log('MongoDB connected successfully');
 
     // Seed initial admin if none exists
@@ -146,7 +149,8 @@ const connectDB = async () => {
 
   } catch (err) {
     console.error('MongoDB connection failed:', err.message);
-    throw err; // Re-throw so the middleware doesn't proceed
+    cachedPromise = null;
+    throw err;
   }
 };
 
