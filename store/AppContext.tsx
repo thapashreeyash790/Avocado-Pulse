@@ -37,12 +37,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [clients, setClients] = useState<ClientProfile[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('avocado_current_user');
     try {
@@ -59,6 +54,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     console.log('[AppProvider] user state:', user, typeof user);
   }, [user]);
+
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [clients, setClients] = useState<ClientProfile[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
