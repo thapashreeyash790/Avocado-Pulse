@@ -142,7 +142,11 @@ app.use(async (req, res, next) => {
 async function sendMail(to, subject, text, html) {
   const smtpHost = process.env.SMTP_HOST;
   if (!smtpHost) {
-    console.log('No SMTP configured — email preview:', { to, subject });
+    console.log('--- Email Simulated (No SMTP) ---');
+    console.log('To:', to);
+    console.log('Subject:', subject);
+    console.log('Body:', text);
+    console.log('---------------------------------');
     return;
   }
   const transporter = nodemailer.createTransport({
