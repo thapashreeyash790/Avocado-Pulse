@@ -274,7 +274,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const filteredProjects = isInternal
     ? projects
-    : projects.filter(p => p.clientId.toLowerCase() === user?.email.toLowerCase());
+    : projects.filter(p => p.clientId?.toLowerCase() === user?.email?.toLowerCase());
 
   const filteredTasks = isInternal
     ? tasks
