@@ -101,7 +101,10 @@ const connectDB = async () => {
   }
 
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/avocado-pm');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/avocado-pm', {
+      bufferCommands: false, // Fail fast if not connected
+      serverSelectionTimeoutMS: 5000 // Timeout after 5s
+    });
     isConnected = true;
     console.log('MongoDB connected');
 
@@ -129,6 +132,9 @@ const connectDB = async () => {
 // Middleware to ensure DB is connected
 app.use(async (req, res, next) => {
   await connectDB();
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
   next();
 });
 
