@@ -36,9 +36,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    useEffect(() => {
-      console.log('[AppProvider] user state:', user, typeof user);
-    }, [user]);
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
@@ -57,6 +55,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return null;
     }
   });
+
+  useEffect(() => {
+    console.log('[AppProvider] user state:', user, typeof user);
+  }, [user]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -248,7 +250,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const isInternal = user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN;
-  
+
   const filteredProjects = isInternal
     ? projects
     : projects.filter(p => p.clientId.toLowerCase() === user?.email.toLowerCase());
@@ -335,7 +337,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       text,
       createdAt: new Date().toISOString()
     };
-    setTasks(prev => prev.map(task => 
+    setTasks(prev => prev.map(task =>
       task.id === taskId ? { ...task, comments: [...task.comments, newComment] } : task
     ));
     try {
@@ -350,7 +352,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [user, tasks]);
 
   const approveTask = useCallback(async (taskId: string) => {
-    setTasks(prev => prev.map(task => 
+    setTasks(prev => prev.map(task =>
       task.id === taskId ? { ...task, approvalStatus: ApprovalStatus.APPROVED } : task
     ));
     try {
@@ -362,7 +364,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [tasks]);
 
   const requestChanges = useCallback(async (taskId: string) => {
-    setTasks(prev => prev.map(task => 
+    setTasks(prev => prev.map(task =>
       task.id === taskId ? { ...task, approvalStatus: ApprovalStatus.CHANGES_REQUESTED, status: TaskStatus.IN_PROGRESS } : task
     ));
     try {
@@ -382,9 +384,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   return (
-    <AppContext.Provider value={{ 
-      tasks: filteredTasks, projects: filteredProjects, clients, invoices: filteredInvoices, activities, notifications, user, isLoading, error, 
-      setTasks, login, signup, logout, updateTaskStatus, addTask, deleteTask, copyTask, addComment, 
+    <AppContext.Provider value={{
+      tasks: filteredTasks, projects: filteredProjects, clients, invoices: filteredInvoices, activities, notifications, user, isLoading, error,
+      setTasks, login, signup, logout, updateTaskStatus, addTask, deleteTask, copyTask, addComment,
       approveTask, requestChanges, addProject, addClient, generateInvoice, payInvoice, updateInvoiceStatus,
       markNotificationsAsRead, dismissNotification
     }}>
