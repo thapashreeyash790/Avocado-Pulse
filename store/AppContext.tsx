@@ -261,10 +261,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const inv = invoices.find(i => i.id === invoiceId);
       if (!inv) return;
-      const newStatus = status === 'REJECTED' ? 'PENDING' : status;
-      const updated = await api.updateInvoice(invoiceId, { status: newStatus });
+      const updated = await api.updateInvoice(invoiceId, { status });
       setInvoices(prev => prev.map(i => i.id === invoiceId ? updated : i));
-      if (status === 'REJECTED') pushNotification(`Invoice ${invoiceId} rejected and reverted to Pending.`, 'warning');
+      if (status === 'REJECTED') pushNotification(`Invoice ${invoiceId} marked as Rejected.`, 'info');
     } catch (err: any) {
       pushNotification(`Failed to update invoice: ${err.message || err}`, 'warning');
     }
