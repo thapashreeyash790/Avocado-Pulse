@@ -109,52 +109,63 @@ const getModel = (resource) => {
 };
 
 // --- Connection Logic (Cached for Serverless) ---
-let isConnected = false;
 const connectDB = async () => {
-  if (isConnected) return;
+  if (mongoose.connection.readyState === 1) return;
 
-  if (!process.env.MONGODB_URI) {
-    console.warn('MONGODB_URI is not defined. Database features will fail.');
+  if (!process.env.MONGODB_URI && process.env.NODE_ENV === 'production') {
+    throw new Error('MONGODB_URI is missing in production environment');
   }
 
+  const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/avocado-pm';
+
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/avocado-pm', {
-      bufferCommands: false, // Fail fast if not connected
-      serverSelectionTimeoutMS: 5000 // Timeout after 5s
+    console.log('Attempting to connect to MongoDB...');
+    await mongoose.connect(uri, {
+      bufferCommands: false,
+      serverSelectionTimeoutMS: 10000 // Increased to 10s for slower deployment environments
     });
-    isConnected = true;
-    console.log('MongoDB connected');
+    console.log('MongoDB connected successfully');
 
     // Seed initial admin if none exists
     const adminCount = await User.countDocuments({ role: 'ADMIN' });
     if (adminCount === 0) {
       console.log('Seeding initial admin...');
       await User.create({
-        id: 'admin-001', // Keep the ID for consistency with existing data
+        id: 'admin-001',
         name: 'Workspace Admin',
         email: 'avocadoinc790@gmail.com',
-        password: 'admin', // Changed password as per edit
+        password: 'admin',
         role: 'ADMIN',
         verified: true,
         avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin'
       });
     }
 
-    // Clear any existing expiresAt index if it was legacy
+    // Clear legacy index
     try { await User.collection.dropIndex('expiresAt_1'); } catch (e) { }
 
   } catch (err) {
-    console.error('MongoDB connection error:', err);
+    console.error('MongoDB connection failed:', err.message);
+    throw err; // Re-throw so the middleware doesn't proceed
   }
 };
 
 // Middleware to ensure DB is connected
 app.use(async (req, res, next) => {
-  await connectDB();
-  if (mongoose.connection.readyState !== 1) {
-    return res.status(503).json({ error: 'Database not connected' });
+  try {
+    await connectDB();
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'Database connection is not ready' });
+    }
+    next();
+  } catch (err) {
+    console.error('Database connection middleware error:', err.message);
+    res.status(503).json({
+      error: 'Database not connected',
+      details: err.message,
+      hint: process.env.NODE_ENV === 'production' ? 'Check if MONGODB_URI is set in environment variables' : 'Ensure MongoDB is running locally'
+    });
   }
-  next();
 });
 
 
