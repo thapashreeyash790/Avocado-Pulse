@@ -32,9 +32,8 @@ export async function importPrivateKey(keyData: string) {
     return await window.crypto.subtle.importKey("pkcs8", binaryDer, RSA_PARAMS, true, ["decrypt"]);
 }
 
-// Full Encrypted Payload: { encryptedKey: RSA(AES_KEY), iv: IV, ciphertext: AES(MESSAGE) }
-export async function encryptForRecipient(text: string, recipientPubKeyData: string) {
-    const pubKey = await importPublicKey(recipientPubKeyData);
+// Full Encrypted Payload: { eks: { userId: RSA(AES_KEY) }, iv: IV, ciphertext: AES(MESSAGE) }
+export async function encryptForRecipients(text: string, publicKeys: Record<string, string>) {
     const encoder = new TextEncoder();
 
     // 1. Generate AES Key and IV
@@ -44,21 +43,34 @@ export async function encryptForRecipient(text: string, recipientPubKeyData: str
     // 2. Encrypt Text with AES
     const ciphertext = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, encoder.encode(text));
 
-    // 3. Encrypt AES Key with Recipient's RSA Public Key
+    // 3. Encrypt AES Key with each Recipient's RSA Public Key
     const exportedAesKey = await window.crypto.subtle.exportKey("raw", aesKey);
-    const encryptedKey = await window.crypto.subtle.encrypt({ name: "RSA-OAEP" }, pubKey, exportedAesKey);
+    const eks: Record<string, string> = {};
+
+    for (const [userId, pubKeyData] of Object.entries(publicKeys)) {
+        try {
+            const pubKey = await importPublicKey(pubKeyData);
+            const encryptedKey = await window.crypto.subtle.encrypt({ name: "RSA-OAEP" }, pubKey, exportedAesKey);
+            eks[userId] = btoa(String.fromCharCode(...new Uint8Array(encryptedKey)));
+        } catch (err) {
+            console.error(`Failed to encrypt for user ${userId}:`, err);
+        }
+    }
 
     return JSON.stringify({
-        ek: btoa(String.fromCharCode(...new Uint8Array(encryptedKey))),
+        eks,
         iv: btoa(String.fromCharCode(...new Uint8Array(iv))),
         ct: btoa(String.fromCharCode(...new Uint8Array(ciphertext)))
     });
 }
 
-export async function decryptForMe(payloadStr: string, myPrivKey: CryptoKey) {
+export async function decryptForMe(payloadStr: string, myPrivKey: CryptoKey, myId: string) {
     try {
         const payload = JSON.parse(payloadStr);
-        const encryptedKey = Uint8Array.from(atob(payload.ek), c => c.charCodeAt(0));
+        const ekData = payload.eks?.[myId] || payload.ek; // Fallback for old single-ek format or if using myId
+        if (!ekData) return payloadStr;
+
+        const encryptedKey = Uint8Array.from(atob(ekData), c => c.charCodeAt(0));
         const iv = Uint8Array.from(atob(payload.iv), c => c.charCodeAt(0));
         const ciphertext = Uint8Array.from(atob(payload.ct), c => c.charCodeAt(0));
 
@@ -70,7 +82,7 @@ export async function decryptForMe(payloadStr: string, myPrivKey: CryptoKey) {
         const decrypted = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv }, aesKey, ciphertext);
         return new TextDecoder().decode(decrypted);
     } catch (e) {
-        console.error("Decryption failed", e);
-        return payloadStr; // Return raw if failed (might be an old unencrypted message)
+        // Might be an old unencrypted message or a different format
+        return payloadStr;
     }
 }

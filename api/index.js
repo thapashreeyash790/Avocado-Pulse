@@ -421,10 +421,82 @@ app.post('/api/genai/checklist', async (req, res) => {
 // --- GENERIC CRUD ROUTES ---
 
 app.get('/api/:resource', async (req, res) => {
-  const Model = getModel(req.params.resource);
-  if (!Model) return res.status(404).json({ error: 'Not found' });
-  const data = await Model.find({}).sort({ updatedAt: -1 });
-  res.json(data);
+  const { resource } = req.params;
+  const Model = getModel(resource);
+  if (!Model) return res.status(404).json({ error: 'Resource not found' });
+
+  const requesterId = req.headers['x-requester-id'];
+  const requesterRole = req.headers['x-requester-role'];
+
+  let query = {};
+
+  // Visibility filtering
+  if (requesterRole !== 'ADMIN' && requesterId) {
+    const user = await User.findOne({ id: requesterId });
+    if (user) {
+      if (user.role === 'CLIENT') {
+        if (resource === 'projects') {
+          query.clientId = user.email;
+        } else if (resource === 'tasks' || resource === 'invoices') {
+          const clientProjects = await Project.find({ clientId: user.email });
+          query.projectId = { $in: clientProjects.map(p => p.id) };
+        }
+      } else {
+        // TEAM or custom roles
+        const allowed = user.accessibleProjects || [];
+        const perms = user.permissions || {};
+
+        // Module-level blocking
+        if (resource === 'invoices' && perms.billing === false) return res.status(403).json({ error: 'Access denied' });
+        if (resource === 'projects' && perms.projects === false) return res.status(403).json({ error: 'Access denied' });
+        if (resource === 'tasks' && perms.timeline === false) return res.status(403).json({ error: 'Access denied' });
+        if (resource === 'users' && perms.management === false) {
+          // Non-managers can't see full user list except themselves usually, 
+          // but for the UI to work we let them see team members but exclude private info if needed.
+          // For now, if management is off, we block the resource entirely as per original logic.
+          return res.status(403).json({ error: 'Access denied' });
+        }
+
+        if (resource === 'projects') {
+          query.id = { $in: allowed };
+        } else if (resource === 'tasks' || resource === 'invoices') {
+          query.projectId = { $in: allowed };
+        }
+      }
+    }
+  }
+
+  // Chat filtering
+  if (resource === 'conversations' && requesterId) {
+    query.participants = requesterId;
+  }
+  if (resource === 'messages' && requesterId) {
+    const { conversationId } = req.query;
+    if (!conversationId) return res.status(400).json({ error: 'conversationId required' });
+    const conv = await Conversation.findOne({ id: conversationId, participants: requesterId });
+    if (!conv) return res.status(403).json({ error: 'Not authorized' });
+    query.conversationId = conversationId;
+  }
+
+  // Doc filtering
+  if (resource === 'docs' && requesterId && requesterRole !== 'ADMIN') {
+    const user = await User.findOne({ id: requesterId });
+    const userEmail = user?.email || '';
+    query.$or = [
+      { ownerId: requesterId },
+      { sharedWith: requesterId },
+      { sharedWith: userEmail }
+    ];
+  }
+
+  try {
+    const sort = resource === 'messages' ? { createdAt: 1 } : { updatedAt: -1 };
+    const items = await Model.find(query).sort(sort);
+    res.json(items);
+  } catch (err) {
+    console.error('GET Error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
 });
 
 app.get('/api/:resource/:id', async (req, res) => {
@@ -442,6 +514,7 @@ app.post('/api/:resource', async (req, res) => {
   const payload = req.body;
   if (!payload.id) payload.id = (Date.now() + Math.floor(Math.random() * 10000)).toString();
 
+  // Signup Logic
   if (resource === 'users' && !payload.verified) {
     const email = payload.email.toLowerCase();
     const existing = await User.findOne({ email });
@@ -454,8 +527,25 @@ app.post('/api/:resource', async (req, res) => {
     return res.status(201).json({ message: 'OTP sent', email, requiresOtp: true });
   }
 
-  const created = await Model.create(payload);
-  res.status(201).json(created);
+  // Chat special logic
+  if (resource === 'messages') {
+    const { conversationId, senderId, text } = payload;
+    await Conversation.findOneAndUpdate(
+      { id: conversationId },
+      {
+        lastMessage: { text, senderId, createdAt: new Date() },
+        updatedAt: new Date()
+      }
+    );
+  }
+
+  try {
+    const created = await Model.create(payload);
+    res.status(201).json(created);
+  } catch (err) {
+    console.error('POST Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.put('/api/:resource/:id', async (req, res) => {

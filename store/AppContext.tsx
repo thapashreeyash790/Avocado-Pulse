@@ -641,17 +641,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Attempt Encryption
       const conv = conversations.find(c => c.id === conversationId);
       if (conv && conv.type === 'DIRECT') {
+        const pubKeys: Record<string, string> = {};
+        // Add sender's pubkey
+        const sender = allUsers.find(u => u.id === user.id);
+        if (sender?.publicKey) pubKeys[user.id] = sender.publicKey;
+
+        // Add partner's pubkey
         const partnerId = conv.participants.find(p => p !== user.id);
         const partner = allUsers.find(u => u.id === partnerId);
-        if (partner?.publicKey) {
-          encryptedText = await crypto.encryptForRecipient(text, partner.publicKey);
+        if (partner?.publicKey) pubKeys[partnerId || ''] = partner.publicKey;
+
+        if (Object.keys(pubKeys).length > 0) {
+          encryptedText = await crypto.encryptForRecipients(text, pubKeys);
         }
       }
 
       const msg = await api.sendMessage(conversationId, user.id, encryptedText);
 
       // Decrypt locally before storing in state if it's our own message
-      const decrypted = privateKey ? await crypto.decryptForMe(msg.text, privateKey) : msg.text;
+      const decrypted = privateKey ? await crypto.decryptForMe(msg.text, privateKey, user.id) : msg.text;
       setMessages(prev => [...prev, { ...msg, text: decrypted }]);
 
       // refresh conversations to update lastMessage
@@ -670,7 +678,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (privateKey) {
           const decrypted = await Promise.all(msgs.map(async (m: any) => ({
             ...m,
-            text: await crypto.decryptForMe(m.text, privateKey)
+            text: await crypto.decryptForMe(m.text, privateKey, user.id)
           })));
           setMessages(decrypted);
         } else {
