@@ -42,7 +42,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         <nav className="flex-1 px-4 space-y-1">
           <NavItem to="/" icon={<ICONS.LayoutDashboard />} label="Pulse" onClick={() => setSidebarOpen(false)} />
-          <NavItem to="/mystuff" icon={<ICONS.Archive />} label="My Stuff" onClick={() => setSidebarOpen(false)} />
+          {/* <NavItem to="/mystuff" icon={<ICONS.Archive />} label="My Stuff" onClick={() => setSidebarOpen(false)} /> */}
 
           {(user.role === UserRole.ADMIN || user.permissions?.projects !== false) && (
             <NavItem to="/board" icon={<ICONS.Trello />} label="Projects" onClick={() => setSidebarOpen(false)} />

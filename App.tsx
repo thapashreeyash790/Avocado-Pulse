@@ -39,7 +39,7 @@ const AuthenticatedApp: React.FC = () => {
         <Route path="sales" element={<SalesView />} />
         <Route path="chat" element={<ChatView />} />
         <Route path="docs" element={<DocsView />} />
-        <Route path="mystuff" element={<MyStuffView />} />
+        {/* <Route path="mystuff" element={<MyStuffView />} /> */}
         <Route path="team" element={
           <div className="p-8 flex items-center justify-center h-full">
             <div className="text-center max-w-sm">
