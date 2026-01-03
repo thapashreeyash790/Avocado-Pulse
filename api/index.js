@@ -36,7 +36,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ['ADMIN', 'TEAM', 'CLIENT'], default: 'TEAM' },
   avatar: String,
-  verified: { type: Boolean, default: false },
+  verified: { type: Boolean, default: true }, // TEMP: Default to true
   verifyToken: String,
   resetToken: String,
   resetExpires: Number,
@@ -516,7 +516,7 @@ app.post('/api/:resource', async (req, res) => {
       if (!existing) {
         return res.status(403).json({ error: 'Team members must be invited by an Admin.' });
       }
-      if (existing.verified) {
+      if (existing.verified && existing.password !== 'PENDING_INVITE') {
         return res.status(409).json({ error: 'User already exists. Please login.' });
       }
 
@@ -643,7 +643,7 @@ app.post('/api/team/invite', async (req, res) => {
     name,
     role,
     password: 'PENDING_INVITE',
-    verified: false,
+    verified: true, // TEMP: Pre-verify
     permissions: permissions || { billing: true, timeline: true, projects: true, management: false }
   });
 
