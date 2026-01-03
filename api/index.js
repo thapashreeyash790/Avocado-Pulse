@@ -451,11 +451,16 @@ app.get('/api/:resource', async (req, res) => {
         if (resource === 'invoices' && perms.billing === false) return res.status(403).json({ error: 'Access denied' });
         if (resource === 'projects' && perms.projects === false) return res.status(403).json({ error: 'Access denied' });
         if (resource === 'tasks' && perms.timeline === false) return res.status(403).json({ error: 'Access denied' });
-        if (resource === 'users' && perms.management === false) {
+        if (resource === 'users') {
           // Allow fetching users but strip sensitive info if they aren't managers
-          // This enables chat discovery for everyone
+          // This enables chat discovery for everyone (Admin, Team, Clients)
           const allUsers = await User.find({}).sort({ name: 1 });
-          console.log(`[API] Discovery fetch by ${requesterId}: found ${allUsers.length} users`);
+
+          if (perms.management === true || isAdmin) {
+            return res.json(allUsers);
+          }
+
+          console.log(`[API] Discovery fetch by ${requesterId} (Role: ${requesterRole}): found ${allUsers.length} users`);
           const stripped = allUsers.map(u => ({
             id: u.id,
             name: u.name,

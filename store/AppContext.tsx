@@ -252,6 +252,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(heartbeat);
   }, [user]);
 
+  // Decryption Synchronization Effect
+  // Re-decrypt everything when privateKey finally loads (fixes "codes" on login/refresh)
+  useEffect(() => {
+    if (!privateKey || !user) return;
+
+    const decryptEverything = async () => {
+      // 1. Decrypt Messages
+      if (messages.some(m => m.text.includes('"ct"'))) {
+        const decryptedMsgs = await Promise.all(messages.map(async (m) => {
+          if (m.text.includes('"ct"')) {
+            try {
+              return { ...m, text: await crypto.decryptForMe(m.text, privateKey, user.id) };
+            } catch (e) { return m; }
+          }
+          return m;
+        }));
+        setMessages(decryptedMsgs);
+      }
+
+      // 2. Decrypt Conversation Previews
+      if (conversations.some(c => c.lastMessage?.text?.includes('"ct"'))) {
+        const decryptedConvs = await Promise.all(conversations.map(async (c) => {
+          if (c.lastMessage?.text?.includes('"ct"')) {
+            try {
+              const decryptedText = await crypto.decryptForMe(c.lastMessage.text, privateKey, user.id);
+              return { ...c, lastMessage: { ...c.lastMessage, text: decryptedText } };
+            } catch (e) { return c; }
+          }
+          return c;
+        }));
+        setConversations(decryptedConvs);
+      }
+    };
+
+    decryptEverything();
+  }, [privateKey, user?.id]);
+
   // Shared Data Sync (Cross-tab)
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
