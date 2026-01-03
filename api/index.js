@@ -39,7 +39,6 @@ const userSchema = new mongoose.Schema({
   verifyToken: String,
   resetToken: String,
   resetExpires: Number,
-  expiresAt: { type: Date },
   accessibleProjects: { type: [String], default: [] },
   permissions: {
     billing: { type: Boolean, default: true },

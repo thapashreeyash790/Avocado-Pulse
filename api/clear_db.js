@@ -20,21 +20,21 @@ async function clearDB() {
             const collection = db.collection(key);
 
             if (key === 'users') {
-                console.log(`Clearing ${key} except thapa.shreeyash790@gmail.com...`);
+                console.log(`Clearing ${key} except avocadoinc790@gmail.com...`);
                 const result = await collection.deleteMany({
-                    email: { $ne: 'thapa.shreeyash790@gmail.com' }
+                    email: { $ne: 'avocadoinc790@gmail.com' }
                 });
                 console.log(`Deleted ${result.deletedCount} users.`);
 
-                const user = await collection.findOne({ email: 'thapa.shreeyash790@gmail.com' });
+                const user = await collection.findOne({ email: 'avocadoinc790@gmail.com' });
                 if (user) {
-                    console.log('User thapa.shreeyash790@gmail.com found. Updating to ADMIN...');
+                    console.log('User avocadoinc790@gmail.com found. Updating to ADMIN...');
                     await collection.updateOne(
-                        { email: 'thapa.shreeyash790@gmail.com' },
+                        { email: 'avocadoinc790@gmail.com' },
                         { $set: { role: 'ADMIN', verified: true } }
                     );
                 } else {
-                    console.warn('User thapa.shreeyash790@gmail.com NOT found in database.');
+                    console.warn('User avocadoinc790@gmail.com NOT found in database.');
                 }
             } else {
                 console.log(`Clearing ${key}...`);
