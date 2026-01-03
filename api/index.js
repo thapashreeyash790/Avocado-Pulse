@@ -13,6 +13,14 @@ app.use(cors());
 app.options('*', cors());
 app.use(express.json());
 
+// Global Crash Handlers
+process.on('uncaughtException', (err) => {
+  console.error('CRITICAL ERROR (Uncaught Exception):', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('CRITICAL ERROR (Unhandled Rejection):', reason);
+});
+
 // --- Database Schemas ---
 
 // DIAGNOSTICS: Check basic environment variables
@@ -309,9 +317,13 @@ async function sendMail(to, subject, text, html) {
     await transporter.sendMail({ from, to, subject, text, html });
     console.log(`[Email] Successfully sent to ${to}`);
   } catch (err) {
-    console.error('[Email Error] Code:', err.code);
-    console.error('[Email Error] Response:', err.response);
-    throw err;
+    console.error('[Email Error] Failed to send:', err.message);
+    console.log('--- FALLBACK: OTP/Content ---');
+    console.log('To:', to);
+    console.log('Subject:', subject);
+    console.log('Body:', text);
+    console.log('-----------------------------');
+    // We do NOT throw here, allowing the flow to continue even if email fails
   }
 }
 
