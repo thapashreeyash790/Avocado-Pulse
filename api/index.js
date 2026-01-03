@@ -12,6 +12,12 @@ app.use(cors());
 app.options('*', cors());
 app.use(express.json());
 
+// Request Logger
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 // Global Crash Handlers
 process.on('uncaughtException', (err) => {
   console.error('CRITICAL ERROR (Uncaught Exception):', err);
@@ -97,12 +103,23 @@ const verificationSchema = new mongoose.Schema({
   expiresAt: { type: Date, default: () => new Date(Date.now() + 10 * 60 * 1000), index: { expires: 0 } }
 });
 
+const docSchema = new mongoose.Schema({
+  id: { type: String, unique: true },
+  name: String,
+  url: String,
+  type: { type: String, default: 'google_file' },
+  ownerId: String,
+  sharedWith: [String],
+  createdAt: { type: Date, default: Date.now }
+});
+
 const User = mongoose.model('User', userSchema);
 const Client = mongoose.model('Client', clientSchema);
 const Project = mongoose.model('Project', projectSchema);
 const Task = mongoose.model('Task', taskSchema);
 const Invoice = mongoose.model('Invoice', invoiceSchema);
 const Verification = mongoose.model('Verification', verificationSchema);
+const Doc = mongoose.model('Doc', docSchema);
 
 const Conversation = mongoose.model('Conversation', new mongoose.Schema({
   id: { type: String, unique: true },
@@ -143,7 +160,8 @@ const getModel = (resource) => {
     invoices: Invoice,
     conversations: Conversation,
     messages: Message,
-    activities: Activity
+    activities: Activity,
+    docs: Doc
   };
   return models[resource];
 };
@@ -297,13 +315,11 @@ app.post('/api/auth/verify', async (req, res) => {
   let user = await User.findOne({ email });
 
   if (user) {
-    // Invited user updating details
     if (payload.password) user.password = payload.password;
     if (payload.name) user.name = payload.name;
     user.verified = true;
     await user.save();
   } else {
-    // New Signup
     user = await User.create({ ...payload, email, verified: true });
   }
 
@@ -353,6 +369,35 @@ app.post('/api/auth/reset', async (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/auth/update-email-request', async (req, res) => {
+  const { userId, newEmail } = req.body;
+  const lowerEmail = newEmail.toLowerCase();
+  const existing = await User.findOne({ email: lowerEmail });
+  if (existing) return res.status(400).json({ error: 'Email already taken' });
+
+  const token = Math.floor(100000 + Math.random() * 900000).toString();
+  await Verification.deleteMany({ email: lowerEmail });
+  await Verification.create({
+    email: lowerEmail,
+    token,
+    payload: { type: 'EMAIL_UPDATE', userId, newEmail: lowerEmail }
+  });
+
+  await sendMail(lowerEmail, 'Confirm your new email', `Code: ${token}`);
+  res.json({ success: true });
+});
+
+app.post('/api/auth/update-email-confirm', async (req, res) => {
+  const { token } = req.body;
+  const ver = await Verification.findOne({ token });
+  if (!ver || ver.payload?.type !== 'EMAIL_UPDATE') return res.status(404).json({ error: 'Invalid code' });
+
+  const { userId, newEmail } = ver.payload;
+  await User.findOneAndUpdate({ id: userId }, { email: newEmail });
+  await Verification.deleteOne({ _id: ver._id });
+  res.json({ success: true, email: newEmail });
+});
+
 // AI Routes
 app.post('/api/genai/checklist', async (req, res) => {
   try {
@@ -364,7 +409,7 @@ app.post('/api/genai/checklist', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- GENERIC CRUD ROUTES (Interceptors must come ABOVE these) ---
+// --- GENERIC CRUD ROUTES ---
 
 app.get('/api/:resource', async (req, res) => {
   const Model = getModel(req.params.resource);
@@ -388,7 +433,6 @@ app.post('/api/:resource', async (req, res) => {
   const payload = req.body;
   if (!payload.id) payload.id = (Date.now() + Math.floor(Math.random() * 10000)).toString();
 
-  // Signup Logic
   if (resource === 'users' && !payload.verified) {
     const email = payload.email.toLowerCase();
     const existing = await User.findOne({ email });
