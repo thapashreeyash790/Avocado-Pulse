@@ -36,7 +36,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ['ADMIN', 'TEAM', 'CLIENT'], default: 'TEAM' },
   avatar: String,
-  verified: { type: Boolean, default: true }, // TEMP: Default to true
+  verified: { type: Boolean, default: false },
   verifyToken: String,
   resetToken: String,
   resetExpires: Number,
@@ -516,24 +516,10 @@ app.post('/api/:resource', async (req, res) => {
       if (!existing) {
         return res.status(403).json({ error: 'Team members must be invited by an Admin.' });
       }
-      if (existing.verified && existing.password !== 'PENDING_INVITE') {
+      if (existing.verified) {
         return res.status(409).json({ error: 'User already exists. Please login.' });
       }
 
-      // TEMP: Bypass OTP for Team Signup
-      console.log('[TEMP] Bypassing OTP for Team Invite Acceptance');
-      existing.name = payload.name;
-      existing.password = payload.password;
-      existing.verified = true;
-      existing.role = payload.role; // Confirm role
-      existing.id = payload.id || existing.id; // Keep existing ID usually
-      await existing.save();
-
-      const { password, ...safe } = existing.toObject();
-      return res.status(200).json(safe); // Return user object = Login immediately
-
-      /* 
-      // ORIGINAL OTP LOGIC
       const verifyToken = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
       try {
         await sendMail(email, 'Verify your Team Account',
@@ -551,25 +537,12 @@ app.post('/api/:resource', async (req, res) => {
       } catch (e) {
         console.error('Email failed', e);
         return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
-      } 
-      */
+      }
     }
 
     // CLIENT Signup Logic
     if (existing) return res.status(409).json({ error: 'User already exists' });
 
-    // TEMP: Bypass OTP for Client Signup
-    console.log('[TEMP] Bypassing OTP for Client Signup');
-    const newUser = await User.create({
-      ...payload,
-      email,
-      verified: true
-    });
-    const { password, ...safe } = newUser.toObject();
-    return res.status(201).json(safe);
-
-    /* 
-    // ORIGINAL OTP LOGIC
     const verifyToken = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
     try {
       await sendMail(email, 'Verify your Account',
@@ -584,7 +557,6 @@ app.post('/api/:resource', async (req, res) => {
       console.error('Email failed', e);
       return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
     }
-    */
   }
 
   // Client Resource (Added by Team)
@@ -643,7 +615,7 @@ app.post('/api/team/invite', async (req, res) => {
     name,
     role,
     password: 'PENDING_INVITE',
-    verified: true, // TEMP: Pre-verify
+    verified: false,
     permissions: permissions || { billing: true, timeline: true, projects: true, management: false }
   });
 
@@ -658,8 +630,6 @@ app.post('/api/team/invite', async (req, res) => {
 
   const inviteLink = `http://localhost:3010/?invite=true&email=${lowerEmail}&token=${verifyToken}&role=${encodeURIComponent(role)}`;
 
-  /* 
-  // ORIGINAL INVITE LOGIC
   try {
     await sendMail(lowerEmail, 'You are invited to Avocado PM',
       `Welcome ${name}! Please register here: ${inviteLink}`,
@@ -670,11 +640,6 @@ app.post('/api/team/invite', async (req, res) => {
     console.error('Invite email failed', e);
     res.status(500).json({ error: 'Failed to send invite email' });
   }
-  */
-
-  // TEMP: Return Link in Response
-  console.log('[TEMP] Returning Invite Link directly:', inviteLink);
-  res.status(201).json({ success: true, message: 'Invite created (Email Disabled)', inviteLink });
 });
 
 // Update
@@ -745,7 +710,7 @@ app.delete('/api/:resource/:id', async (req, res) => {
 
 // Auth endpoints
 app.post('/api/auth/verify', async (req, res) => {
-  const { token, email } = req.body;
+  const { token } = req.body;
   let ver = null;
 
   // TEMP: Bypass OTP Verification
@@ -776,8 +741,8 @@ app.post('/api/auth/verify', async (req, res) => {
 
   // ... proceed ...
 
-  const { email: verifiedEmail, payload } = ver;
-  let user = await User.findOne({ email: verifiedEmail });
+  const { email, payload } = ver;
+  let user = await User.findOne({ email });
 
   if (user) {
     // Update existing (Invited Team member)
@@ -791,7 +756,7 @@ app.post('/api/auth/verify', async (req, res) => {
     // Create new (Client)
     user = await User.create({
       ...payload,
-      email: verifiedEmail,
+      email,
       verified: true
     });
   }
@@ -833,6 +798,7 @@ app.post('/api/auth/resend', async (req, res) => {
 });
 
 // OTP-based Email Update
+// OTP-based Email Update
 app.post('/api/auth/update-email-request', async (req, res) => {
   const { userId, newEmail } = req.body;
   const lowerEmail = newEmail.toLowerCase();
@@ -840,7 +806,6 @@ app.post('/api/auth/update-email-request', async (req, res) => {
   const existing = await User.findOne({ email: lowerEmail });
   if (existing) return res.status(400).json({ error: 'This email is already taken' });
 
-  /*
   const verifyToken = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
 
   try {
@@ -860,20 +825,25 @@ app.post('/api/auth/update-email-request', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: 'Failed to send email' });
   }
-  */
-
-  // TEMP: Auto-Update Email
-  const user = await User.findOne({ id: userId });
-  if (user) {
-    user.email = lowerEmail;
-    await user.save();
-  }
-  res.json({ success: true, message: 'Email updated (Verification Bypassed)' });
 });
 
 // REMOVED: app.post('/api/auth/update-email-confirm'... because we auto-updated above
 app.post('/api/auth/update-email-confirm', async (req, res) => {
-  res.json({ success: true, message: 'Already updated' });
+  const { token } = req.body;
+  const ver = await Verification.findOne({ token });
+  if (!ver || ver.payload?.type !== 'EMAIL_UPDATE') {
+    return res.status(404).json({ error: 'Invalid or expired verification code' });
+  }
+
+  const { userId, newEmail } = ver.payload;
+  const user = await User.findOne({ id: userId });
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  user.email = newEmail;
+  await user.save();
+
+  await Verification.deleteOne({ _id: ver._id });
+  res.json({ success: true, message: 'Email updated successfully', email: newEmail });
 });
 
 app.post('/api/auth/forgot', async (req, res) => {
@@ -885,12 +855,18 @@ app.post('/api/auth/forgot', async (req, res) => {
   user.resetExpires = Date.now() + 3600000;
   await user.save();
 
-  /*
-  // Send email logic...
-  res.json({ success: true });
-  */
-  console.log(`[TEMP] Reset Token for ${email}: ${user.resetToken}`);
-  res.json({ success: true, message: 'Reset link sent (Check Console)' });
+  const resetLink = `http://localhost:3010/reset?token=${user.resetToken}`;
+
+  try {
+    await sendMail(email, 'Password Reset Request',
+      `Reset your password`,
+      `<h2>Reset Password</h2><p>Click here to reset: <a href="${resetLink}">Reset Link</a></p><p>Or copy this token: ${user.resetToken}</p>`
+    );
+    res.json({ success: true, message: 'Reset email sent' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to send email' });
+  }
 });
 
 app.post('/api/auth/reset', async (req, res) => {
