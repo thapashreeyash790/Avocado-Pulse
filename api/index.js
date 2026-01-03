@@ -288,10 +288,19 @@ app.use(async (req, res, next) => {
 
 
 // --- Email Helper ---
+// --- Email Helper ---
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  }
+});
+
 async function sendMail(to, subject, text, html) {
   const smtpHost = process.env.SMTP_HOST;
+  // If no SMTP_HOST set, just mock it
   if (!smtpHost) {
-
     console.log('--- Email Simulated (No SMTP) ---');
     console.log('To:', to);
     console.log('Subject:', subject);
@@ -299,33 +308,28 @@ async function sendMail(to, subject, text, html) {
     console.log('---------------------------------');
     return;
   }
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: (process.env.SMTP_SECURE || 'false') === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
 
+  console.log(`[Email] Attempting to send to ${to}...`);
   try {
-    const from = `"Avocado PM" <${process.env.EMAIL_FROM || process.env.SMTP_USER}>`;
-    console.log(`[Email] Sending to ${to} from ${from}...`);
-
-    await transporter.verify(); // Check connection before sending
-    await transporter.sendMail({ from, to, subject, text, html });
-    console.log(`[Email] Successfully sent to ${to}`);
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_FROM || '"Avocado PM" <avocadoinc790@gmail.com>',
+      to,
+      subject,
+      text,
+      html: html || text
+    });
+    console.log('[Email] Sent successfully via Gmail:', info.messageId);
+    return info;
   } catch (err) {
-    console.error('[Email Error] Failed to send:', err.message);
+    console.error('[Email Error] Gmail SMTP failed:', err.message);
+    // Fallback
     console.log('--- FALLBACK: OTP/Content ---');
-    console.log('To:', to);
-    console.log('Subject:', subject);
-    console.log('Body:', text);
+    console.log(`To: ${to}`);
+    console.log(`Subject: ${subject}`);
+    console.log(`Content: ${text || html}`);
     console.log('-----------------------------');
-    // We do NOT throw here, allowing the flow to continue even if email fails
   }
-}
+};
 
 // --- Routes ---
 
