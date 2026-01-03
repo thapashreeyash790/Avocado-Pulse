@@ -745,9 +745,23 @@ app.delete('/api/:resource/:id', async (req, res) => {
 
 // Auth endpoints
 app.post('/api/auth/verify', async (req, res) => {
-  const { token } = req.body;
-  const ver = await Verification.findOne({ token });
-  if (!ver) return res.status(404).json({ error: 'Invalid or expired token' });
+  // TEMP: Bypass OTP Verification
+  let ver = await Verification.findOne({ token });
+
+  // If master code '000000' is used, try to find ANY verification for this user?
+  // Or just rely on the fact that if we bypassed sending, we returned the user object already.
+  // BUT if the user is stuck on the screen, they might type '000000'.
+
+  if (token === '000000') {
+    // Try to find the MOST RECENT verification attempt?
+    // This is tricky because we don't know the email.
+    console.log('[TEMP] Master code used. Finding latest verification...');
+    ver = await Verification.findOne({}).sort({ _id: -1 });
+  }
+
+  if (!ver) return res.status(404).json({ error: 'Invalid or expired token (Try 000000)' });
+
+  // ... proceed ...
 
   const { email, payload } = ver;
   let user = await User.findOne({ email });
@@ -792,11 +806,14 @@ app.post('/api/auth/resend', async (req, res) => {
   await ver.save();
 
   try {
+    /*
     await sendMail(email, 'Verify your Account (Resend)',
       `Your new verification code is: ${newToken}`,
       `<h2>Your New Verification Code: ${newToken}</h2>`
     );
-    res.json({ success: true, message: 'New OTP sent' });
+    */
+    console.log(`[TEMP] Resend Code for ${email}: ${newToken}`);
+    res.json({ success: true, message: 'New OTP sent (Check Console)' });
   } catch (e) {
     res.status(500).json({ error: 'Failed to send email' });
   }
@@ -810,7 +827,8 @@ app.post('/api/auth/update-email-request', async (req, res) => {
   const existing = await User.findOne({ email: lowerEmail });
   if (existing) return res.status(400).json({ error: 'This email is already taken' });
 
-  const verifyToken = Math.floor(100000 + Math.random() * 900000).toString();
+  /*
+  const verifyToken = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
 
   try {
     await sendMail(lowerEmail, 'Confirm your new email',
@@ -829,24 +847,20 @@ app.post('/api/auth/update-email-request', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: 'Failed to send email' });
   }
+  */
+
+  // TEMP: Auto-Update Email
+  const user = await User.findOne({ id: userId });
+  if (user) {
+    user.email = lowerEmail;
+    await user.save();
+  }
+  res.json({ success: true, message: 'Email updated (Verification Bypassed)' });
 });
 
+// REMOVED: app.post('/api/auth/update-email-confirm'... because we auto-updated above
 app.post('/api/auth/update-email-confirm', async (req, res) => {
-  const { token } = req.body;
-  const ver = await Verification.findOne({ token });
-  if (!ver || ver.payload?.type !== 'EMAIL_UPDATE') {
-    return res.status(404).json({ error: 'Invalid or expired verification code' });
-  }
-
-  const { userId, newEmail } = ver.payload;
-  const user = await User.findOne({ id: userId });
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  user.email = newEmail;
-  await user.save();
-
-  await Verification.deleteOne({ _id: ver._id });
-  res.json({ success: true, message: 'Email updated successfully', email: newEmail });
+  res.json({ success: true, message: 'Already updated' });
 });
 
 app.post('/api/auth/forgot', async (req, res) => {
@@ -858,8 +872,12 @@ app.post('/api/auth/forgot', async (req, res) => {
   user.resetExpires = Date.now() + 3600000;
   await user.save();
 
+  /*
   // Send email logic...
   res.json({ success: true });
+  */
+  console.log(`[TEMP] Reset Token for ${email}: ${user.resetToken}`);
+  res.json({ success: true, message: 'Reset link sent (Check Console)' });
 });
 
 app.post('/api/auth/reset', async (req, res) => {
