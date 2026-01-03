@@ -15,6 +15,20 @@ app.use(express.json());
 
 // --- Database Schemas ---
 
+// DIAGNOSTICS: Check basic environment variables
+const missingVars = [];
+if (!process.env.MONGODB_URI) missingVars.push('MONGODB_URI');
+if (!process.env.SMTP_HOST) missingVars.push('SMTP_HOST');
+if (!process.env.SMTP_USER) missingVars.push('SMTP_USER');
+if (!process.env.SMTP_PASS) missingVars.push('SMTP_PASS');
+
+if (missingVars.length > 0) {
+  console.warn('⚠️  [DIAGNOSTICS] Missing Environment Variables:', missingVars.join(', '));
+} else {
+  console.log('✅ [DIAGNOSTICS] All critical environment variables appear to be set.');
+}
+
+
 const userSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: String,
@@ -295,7 +309,40 @@ async function sendMail(to, subject, text, html) {
 
 // --- Routes ---
 
+
+app.get('/api/health', (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const dbStatus = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting',
+    99: 'uninitialized',
+  };
+
+  const smtpConfigured = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  res.json({
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    database: {
+      connected: dbState === 1,
+      state: dbStatus[dbState] || 'unknown',
+      host: mongoose.connection.host ? '***' : 'not-connected'
+    },
+    mail: {
+      configured: smtpConfigured,
+      smtpHost: process.env.SMTP_HOST || 'missing'
+    },
+    environment: {
+      nodeEnv: process.env.NODE_ENV,
+      mongoUriSet: !!process.env.MONGODB_URI
+    }
+  });
+});
+
 app.get('/api/test-email', async (req, res) => {
+
   try {
     const email = req.query.email || process.env.SMTP_USER;
     await sendMail(email, 'Test: Avocado PM Gmail Logic', 'This confirms your Gmail is delivering real emails!');
