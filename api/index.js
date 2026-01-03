@@ -214,15 +214,23 @@ const connectDB = async () => {
     const adminCount = await User.countDocuments({ role: 'ADMIN' });
     if (adminCount === 0) {
       console.log('Seeding initial admin...');
-      await User.create({
-        id: 'admin-001',
-        name: 'Workspace Admin',
-        email: 'avocadoinc790@gmail.com',
-        password: 'admin',
-        role: 'ADMIN',
-        verified: true,
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin'
-      });
+      try {
+        await User.create({
+          id: 'admin-001',
+          name: 'Workspace Admin',
+          email: 'avocadoinc790@gmail.com',
+          password: 'admin',
+          role: 'ADMIN',
+          verified: true,
+          avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin'
+        });
+      } catch (err) {
+        if (err.code === 11000) {
+          console.log('Admin already exists (Duplicate Key ignored).');
+        } else {
+          throw err;
+        }
+      }
     }
 
     // Clear legacy index
