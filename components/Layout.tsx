@@ -60,8 +60,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <NavItem to="/management" icon={<ICONS.Settings />} label="Workspace" onClick={() => setSidebarOpen(false)} />
           )}
 
-          <NavItem to="/chat" icon={<ICONS.MessageSquare />} label="Messages" onClick={() => setSidebarOpen(false)} />
-          <NavItem to="/docs" icon={<ICONS.FileText />} label="Docs" onClick={() => setSidebarOpen(false)} />
+          {(user.role === UserRole.ADMIN || user.permissions?.messages !== false) && (
+            <NavItem to="/chat" icon={<ICONS.MessageSquare />} label="Messages" onClick={() => setSidebarOpen(false)} />
+          )}
+          {(user.role === UserRole.ADMIN || user.permissions?.docs !== false) && (
+            <NavItem to="/docs" icon={<ICONS.FileText />} label="Docs" onClick={() => setSidebarOpen(false)} />
+          )}
         </nav>
 
         <div className="p-4 border-t border-gray-200">

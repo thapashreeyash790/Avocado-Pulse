@@ -142,7 +142,7 @@ const InviteModal = ({ onClose, onSave }: any) => {
     name: '',
     email: '',
     role: UserRole.TEAM,
-    permissions: { billing: true, projects: true, timeline: true, management: false }
+    permissions: { billing: true, projects: true, timeline: true, management: false, messages: true, docs: true }
   });
 
   return (
@@ -281,7 +281,7 @@ const ProfileEditModal = ({ user, currentUser, onClose, onSave, onRequestEmailUp
     email: user.email,
     role: user.role,
     accessibleProjects: user.accessibleProjects || [],
-    permissions: user.permissions || { billing: true, projects: true, timeline: true, management: false }
+    permissions: user.permissions || { billing: true, projects: true, timeline: true, management: false, messages: true, docs: true }
   });
   const [otp, setOtp] = useState('');
   const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);

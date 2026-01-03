@@ -44,7 +44,9 @@ const userSchema = new mongoose.Schema({
     billing: { type: Boolean, default: true },
     projects: { type: Boolean, default: true },
     timeline: { type: Boolean, default: true },
-    management: { type: Boolean, default: false }
+    management: { type: Boolean, default: false },
+    messages: { type: Boolean, default: true },
+    docs: { type: Boolean, default: true }
   },
   publicKey: String,
   lastActive: { type: Date, default: Date.now },
@@ -450,10 +452,19 @@ app.get('/api/:resource', async (req, res) => {
         if (resource === 'projects' && perms.projects === false) return res.status(403).json({ error: 'Access denied' });
         if (resource === 'tasks' && perms.timeline === false) return res.status(403).json({ error: 'Access denied' });
         if (resource === 'users' && perms.management === false) {
-          // Non-managers can't see full user list except themselves usually, 
-          // but for the UI to work we let them see team members but exclude private info if needed.
-          // For now, if management is off, we block the resource entirely as per original logic.
-          return res.status(403).json({ error: 'Access denied' });
+          // Allow fetching users but strip sensitive info if they aren't managers
+          // This enables chat discovery for everyone
+          const allUsers = await User.find({}).sort({ name: 1 });
+          const stripped = allUsers.map(u => ({
+            id: u.id,
+            name: u.name,
+            role: u.role,
+            avatar: u.avatar,
+            email: u.email,
+            publicKey: u.publicKey,
+            lastActive: u.lastActive
+          }));
+          return res.json(stripped);
         }
 
         if (resource === 'projects') {
@@ -548,10 +559,22 @@ app.post('/api/:resource', async (req, res) => {
 });
 
 app.put('/api/:resource/:id', async (req, res) => {
-  const Model = getModel(req.params.resource);
-  const updated = await Model?.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
-  if (!updated) return res.status(404).json({ error: 'Not found' });
-  res.json(updated);
+  const { resource, id } = req.params;
+  const Model = getModel(resource);
+  if (!Model) return res.status(404).json({ error: 'Not found' });
+
+  const payload = req.body;
+  if (resource === 'users') {
+    payload.lastActive = new Date();
+  }
+
+  try {
+    const updated = await Model.findOneAndUpdate({ id }, payload, { new: true });
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.delete('/api/:resource/:id', async (req, res) => {

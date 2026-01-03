@@ -37,7 +37,7 @@ const ChatView: React.FC = () => {
     const isOnline = (targetUser?: User) => {
         if (!targetUser?.lastActive) return false;
         const diff = Date.now() - new Date(targetUser.lastActive).getTime();
-        return diff < 5 * 60 * 1000; // 5 minutes
+        return diff < 3.5 * 60 * 1000; // 3.5 minutes (heartbeat is 2m)
     };
 
     const filteredUsers = allUsers.filter(u =>

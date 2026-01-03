@@ -42,6 +42,8 @@ export interface User {
     projects: boolean;
     timeline: boolean;
     management: boolean;
+    messages: boolean;
+    docs: boolean;
   };
   bookmarks?: string[];
   drafts?: {

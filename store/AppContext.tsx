@@ -142,7 +142,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loadAllData = useCallback(async () => {
     if (!user) return;
-    const perms = user.permissions || { billing: true, projects: true, timeline: true, management: false };
+    const perms = user.permissions || { billing: true, projects: true, timeline: true, management: false, messages: true, docs: true };
     const isAdmin = user.role === UserRole.ADMIN;
 
     try {
@@ -151,7 +151,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (isAdmin || perms.management === true) ? api.fetchClients() : Promise.resolve([]),
         (isAdmin || perms.billing !== false) ? api.fetchInvoices() : Promise.resolve([]),
         (isAdmin || perms.timeline !== false) ? api.fetchTasks() : Promise.resolve([]),
-        (isAdmin || perms.management === true) ? api.fetchUsers() : Promise.resolve([user]),
+        api.fetchUsers(), // Fetch all users (stripped by backend if not admin)
         api.fetchConversations(),
         api.fetchResource('docs'),
         api.fetchResource('activities')
@@ -213,13 +213,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const pubKeyStr = await crypto.exportPublicKey(keyPair.publicKey);
         const privKeyStr = await crypto.exportPrivateKey(keyPair.privateKey);
 
-        await api.updateUser(user.id, { publicKey: pubKeyStr });
+        const updatedUser = await api.updateUser(user.id, { publicKey: pubKeyStr });
+        setUser(updatedUser);
+        setAllUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
+
         localStorage.setItem(`ft_priv_${user.id}`, privKeyStr);
         privKey = keyPair.privateKey;
       }
       setPrivateKey(privKey);
     };
     initEncryption();
+  }, [user]);
+
+  // Activity Heartbeat
+  useEffect(() => {
+    if (!user) return;
+    const heartbeat = setInterval(() => {
+      api.updateUser(user.id, {}); // PUT to users/:id refreshes lastActive on server
+    }, 120000); // Every 2 minutes
+    return () => clearInterval(heartbeat);
   }, [user]);
 
   // Shared Data Sync (Cross-tab)
