@@ -216,17 +216,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!user) return;
 
       let privKey: CryptoKey | null = null;
-      const storedPriv = localStorage.getItem(`ft_priv_${user.id}`);
+      const savedPrivKey = localStorage.getItem(`ft_priv_${user.id}`);
 
-      if (storedPriv) {
+      if (savedPrivKey) {
         try {
-          privKey = await crypto.importPrivateKey(storedPriv);
+          privKey = await crypto.importPrivateKey(savedPrivKey);
         } catch (e) {
-          console.error("Failed to import stored private key", e);
+          console.error('Failed to import saved private key:', e);
         }
       }
 
-      if (!privKey) {
+      // Key Self-Healing: If we have a public key on server but legacy/missing private key locally, REGENERATE
+      if (!privKey && user.publicKey) {
+        console.warn('[AppContext] Private key missing but public key exists. Regenerating...');
+        const keyPair = await crypto.generateKeyPair();
+        const pubKeyStr = await crypto.exportPublicKey(keyPair.publicKey);
+        const privKeyStr = await crypto.exportPrivateKey(keyPair.privateKey);
+
+        const updatedUser = await api.updateUser(user.id, { publicKey: pubKeyStr });
+        setUser(updatedUser);
+        setAllUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
+        localStorage.setItem(`ft_priv_${user.id}`, privKeyStr);
+        privKey = keyPair.privateKey;
+      }
+      else if (!privKey && !user.publicKey) {
+        // Normal first-time generation
         const keyPair = await crypto.generateKeyPair();
         const pubKeyStr = await crypto.exportPublicKey(keyPair.publicKey);
         const privKeyStr = await crypto.exportPrivateKey(keyPair.privateKey);
@@ -287,7 +301,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     decryptEverything();
-  }, [privateKey, user?.id]);
+  }, [privateKey, user?.id, messages.length, conversations.length]);
 
   // Shared Data Sync (Cross-tab)
   useEffect(() => {
@@ -718,8 +732,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const partner = allUsers.find(u => u.id === partnerId);
         if (partner?.publicKey) pubKeys[partnerId || ''] = partner.publicKey;
 
-        if (Object.keys(pubKeys).length > 0) {
+        // ROBUST HANDSHAKE: Only encrypt if BOTH parties have public keys
+        // This prevents one user from sending a "code" that the other can't read
+        if (pubKeys[user.id] && partnerId && pubKeys[partnerId]) {
           encryptedText = await crypto.encryptForRecipients(text, pubKeys);
+        } else {
+          console.warn('[AppContext] Missing public keys for encryption. Falling back to plaintext.');
         }
       }
 
