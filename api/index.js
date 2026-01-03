@@ -776,8 +776,8 @@ app.post('/api/auth/verify', async (req, res) => {
 
   // ... proceed ...
 
-  const { email, payload } = ver;
-  let user = await User.findOne({ email });
+  const { email: verifiedEmail, payload } = ver;
+  let user = await User.findOne({ email: verifiedEmail });
 
   if (user) {
     // Update existing (Invited Team member)
@@ -791,7 +791,7 @@ app.post('/api/auth/verify', async (req, res) => {
     // Create new (Client)
     user = await User.create({
       ...payload,
-      email,
+      email: verifiedEmail,
       verified: true
     });
   }
