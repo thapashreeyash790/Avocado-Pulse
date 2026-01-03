@@ -511,7 +511,7 @@ app.post('/api/:resource', async (req, res) => {
     const email = (payload.email || '').toLowerCase();
     const existing = await User.findOne({ email });
 
-    // Internal (Team/Admin/Custom) Signup Logic (Must be invited)
+    // Internal (Team/Admin/Custom) Signup Logic (Has been invited)
     if (payload.role !== 'CLIENT') {
       if (!existing) {
         return res.status(403).json({ error: 'Team members must be invited by an Admin.' });
@@ -519,8 +519,22 @@ app.post('/api/:resource', async (req, res) => {
       if (existing.verified) {
         return res.status(409).json({ error: 'User already exists. Please login.' });
       }
-      const verifyToken = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
 
+      // TEMP: Bypass OTP for Team Signup
+      console.log('[TEMP] Bypassing OTP for Team Invite Acceptance');
+      existing.name = payload.name;
+      existing.password = payload.password;
+      existing.verified = true;
+      existing.role = payload.role; // Confirm role
+      existing.id = payload.id || existing.id; // Keep existing ID usually
+      await existing.save();
+
+      const { password, ...safe } = existing.toObject();
+      return res.status(200).json(safe); // Return user object = Login immediately
+
+      /* 
+      // ORIGINAL OTP LOGIC
+      const verifyToken = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
       try {
         await sendMail(email, 'Verify your Team Account',
           `Your verification code is: ${verifyToken}`,
@@ -531,21 +545,32 @@ app.post('/api/:resource', async (req, res) => {
         await Verification.create({
           email,
           token: verifyToken,
-          payload: { ...payload, id: existing.id } // payload from request body (name, password, role)
+          payload: { ...payload, id: existing.id }
         });
         return res.status(200).json({ message: 'OTP sent', email, requiresOtp: true });
       } catch (e) {
         console.error('Email failed', e);
         return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
-      }
+      } 
+      */
     }
 
     // CLIENT Signup Logic
     if (existing) return res.status(409).json({ error: 'User already exists' });
 
-    const verifyToken = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+    // TEMP: Bypass OTP for Client Signup
+    console.log('[TEMP] Bypassing OTP for Client Signup');
+    const newUser = await User.create({
+      ...payload,
+      email,
+      verified: true
+    });
+    const { password, ...safe } = newUser.toObject();
+    return res.status(201).json(safe);
 
-    // Send email
+    /* 
+    // ORIGINAL OTP LOGIC
+    const verifyToken = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
     try {
       await sendMail(email, 'Verify your Account',
         `Your verification code is: ${verifyToken}`,
@@ -559,6 +584,7 @@ app.post('/api/:resource', async (req, res) => {
       console.error('Email failed', e);
       return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
     }
+    */
   }
 
   // Client Resource (Added by Team)
@@ -632,6 +658,8 @@ app.post('/api/team/invite', async (req, res) => {
 
   const inviteLink = `http://localhost:3010/?invite=true&email=${lowerEmail}&token=${verifyToken}&role=${encodeURIComponent(role)}`;
 
+  /* 
+  // ORIGINAL INVITE LOGIC
   try {
     await sendMail(lowerEmail, 'You are invited to Avocado PM',
       `Welcome ${name}! Please register here: ${inviteLink}`,
@@ -642,6 +670,11 @@ app.post('/api/team/invite', async (req, res) => {
     console.error('Invite email failed', e);
     res.status(500).json({ error: 'Failed to send invite email' });
   }
+  */
+
+  // TEMP: Return Link in Response
+  console.log('[TEMP] Returning Invite Link directly:', inviteLink);
+  res.status(201).json({ success: true, message: 'Invite created (Email Disabled)', inviteLink });
 });
 
 // Update
