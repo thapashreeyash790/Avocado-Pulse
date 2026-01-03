@@ -42,7 +42,7 @@ const LoginView: React.FC = () => {
 
     try {
       if (isVerifying) {
-        const success = await verifyOTP(otp);
+        const success = await verifyOTP(otp, email);
         if (success) {
           setIsVerifying(false);
           setIsLogin(true);

@@ -745,18 +745,31 @@ app.delete('/api/:resource/:id', async (req, res) => {
 
 // Auth endpoints
 app.post('/api/auth/verify', async (req, res) => {
+  const { token, email } = req.body;
+  let ver = null;
+
   // TEMP: Bypass OTP Verification
-  let ver = await Verification.findOne({ token });
-
-  // If master code '000000' is used, try to find ANY verification for this user?
-  // Or just rely on the fact that if we bypassed sending, we returned the user object already.
-  // BUT if the user is stuck on the screen, they might type '000000'.
-
   if (token === '000000') {
-    // Try to find the MOST RECENT verification attempt?
-    // This is tricky because we don't know the email.
-    console.log('[TEMP] Master code used. Finding latest verification...');
+    console.log('[TEMP] Master code used for:', email);
+
+    // If email provided, skip Verification table lookup
+    if (email) {
+      let user = await User.findOne({ email });
+      if (user) {
+        user.verified = true;
+        await user.save();
+        const { password, ...safe } = user.toObject();
+        return res.json(safe);
+      } else {
+        return res.status(404).json({ error: 'User not found to verify' });
+      }
+    }
+
+    // Fallback: Try to find latest verification if no email
+    console.log('[TEMP] No email provided, finding latest verification...');
     ver = await Verification.findOne({}).sort({ _id: -1 });
+  } else {
+    ver = await Verification.findOne({ token });
   }
 
   if (!ver) return res.status(404).json({ error: 'Invalid or expired token (Try 000000)' });

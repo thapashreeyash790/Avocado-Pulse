@@ -41,7 +41,7 @@ interface AppContextType {
   updateInvoiceStatus: (invoiceId: string, status: Invoice['status']) => Promise<void>;
   markNotificationsAsRead: () => void;
   dismissNotification: (id: string) => void;
-  verifyOTP: (token: string) => Promise<boolean>;
+  verifyOTP: (token: string, email?: string) => Promise<boolean>;
   updateUser: (id: string, payload: Partial<User>) => Promise<void>;
   requestEmailUpdate: (userId: string, newEmail: string) => Promise<void>;
   confirmEmailUpdate: (token: string) => Promise<void>;
@@ -333,11 +333,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const verifyOTP = async (token: string) => {
+  const verifyOTP = async (token: string, email?: string) => {
     setError(null);
     setIsLoading(true);
     try {
-      await api.verifyEmail(token);
+      await api.verifyEmail(token, email);
       pushNotification('Email verified! Please sign in with your credentials.', 'success');
       return true; // Indicate success for redirection
     } catch (err: any) {

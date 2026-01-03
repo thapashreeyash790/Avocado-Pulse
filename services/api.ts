@@ -93,8 +93,8 @@ export const api = {
     await safeFetch('/api/auth/reset', { method: 'POST', body: JSON.stringify({ token, password }) });
   },
 
-  async verifyEmail(token: string): Promise<User> {
-    const user = await safeFetch('/api/auth/verify', { method: 'POST', body: JSON.stringify({ token }) }) as User;
+  async verifyEmail(token: string, email?: string): Promise<User> {
+    const user = await safeFetch('/api/auth/verify', { method: 'POST', body: JSON.stringify({ token, email }) }) as User;
     return user;
   },
 
