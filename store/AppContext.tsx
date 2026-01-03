@@ -161,8 +161,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setInvoices(fInvoices || []);
       setTasks(fTasks || []);
       setAllUsers(fUsers || []);
-      setTeam((fUsers || []).filter((u: any) => u.role !== 'CLIENT'));
-      setConversations(fConvs || []);
+      setTeam(fUsers?.filter((u: any) => u.role !== UserRole.CLIENT) || []);
+
+      // Decrypt Conversation Previews
+      if (fConvs && privateKey) {
+        const decryptedConvs = await Promise.all(fConvs.map(async (c: any) => {
+          if (c.lastMessage && c.lastMessage.text) {
+            try {
+              const decryptedText = await crypto.decryptForMe(c.lastMessage.text, privateKey, user.id);
+              return { ...c, lastMessage: { ...c.lastMessage, text: decryptedText } };
+            } catch (e) {
+              return c;
+            }
+          }
+          return c;
+        }));
+        setConversations(decryptedConvs);
+      } else {
+        setConversations(fConvs || []);
+      }
+
       setDocs(fDocs || []);
       setActivities(fActivities?.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || []);
     } catch (err: any) {
@@ -230,7 +248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!user) return;
     const heartbeat = setInterval(() => {
       api.updateUser(user.id, {}); // PUT to users/:id refreshes lastActive on server
-    }, 120000); // Every 2 minutes
+    }, 30000); // Every 30 seconds
     return () => clearInterval(heartbeat);
   }, [user]);
 
@@ -674,9 +692,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const decrypted = privateKey ? await crypto.decryptForMe(msg.text, privateKey, user.id) : msg.text;
       setMessages(prev => [...prev, { ...msg, text: decrypted }]);
 
-      // refresh conversations to update lastMessage
-      const convs = await api.fetchConversations();
-      setConversations(convs);
+      // refresh conversations to update lastMessage (with decryption)
+      const fConvs = await api.fetchConversations();
+      if (fConvs && privateKey) {
+        const decryptedConvs = await Promise.all(fConvs.map(async (c: any) => {
+          if (c.lastMessage && c.lastMessage.text) {
+            try {
+              const decryptedText = await crypto.decryptForMe(c.lastMessage.text, privateKey, user.id);
+              return { ...c, lastMessage: { ...c.lastMessage, text: decryptedText } };
+            } catch (e) { return c; }
+          }
+          return c;
+        }));
+        setConversations(decryptedConvs);
+      } else {
+        setConversations(fConvs || []);
+      }
     } catch (err: any) {
       pushNotification(`Failed to send message: ${err.message}`, 'error');
     }
@@ -721,11 +752,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const msgs = await api.fetchMessages(activeConversation.id);
         if (msgs.length !== messages.length) {
-          setMessages(msgs);
+          if (privateKey) {
+            const decrypted = await Promise.all(msgs.map(async (m: any) => {
+              try {
+                return { ...m, text: await crypto.decryptForMe(m.text, privateKey, user.id) };
+              } catch (e) { return m; }
+            }));
+            setMessages(decrypted);
+          } else {
+            setMessages(msgs);
+          }
         }
-        // Also refresh conversations for sidebar updates
-        const convs = await api.fetchConversations();
-        setConversations(convs);
+
+        // Also refresh conversations for sidebar updates (with decryption)
+        const fConvs = await api.fetchConversations();
+        if (fConvs && privateKey) {
+          const decryptedConvs = await Promise.all(fConvs.map(async (c: any) => {
+            if (c.lastMessage && c.lastMessage.text) {
+              try {
+                const decryptedText = await crypto.decryptForMe(c.lastMessage.text, privateKey, user.id);
+                return { ...c, lastMessage: { ...c.lastMessage, text: decryptedText } };
+              } catch (e) { return c; }
+            }
+            return c;
+          }));
+          setConversations(prev => {
+            // Only update if something changed to avoid re-renders
+            if (JSON.stringify(prev) === JSON.stringify(decryptedConvs)) return prev;
+            return decryptedConvs;
+          });
+        }
       } catch (e) { }
     }, 5000);
     return () => clearInterval(interval);

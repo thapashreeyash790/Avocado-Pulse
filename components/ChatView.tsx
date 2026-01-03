@@ -45,6 +45,13 @@ const ChatView: React.FC = () => {
         (u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
+    useEffect(() => {
+        if (showNewChat) {
+            console.log('[ChatView] allUsers count:', allUsers.length);
+            console.log('[ChatView] Admin found?:', allUsers.some(u => u.role === UserRole.ADMIN));
+        }
+    }, [showNewChat, allUsers]);
+
     const startChat = async () => {
         if (selectedUsers.length === 1) {
             const partnerId = selectedUsers[0];

@@ -455,6 +455,7 @@ app.get('/api/:resource', async (req, res) => {
           // Allow fetching users but strip sensitive info if they aren't managers
           // This enables chat discovery for everyone
           const allUsers = await User.find({}).sort({ name: 1 });
+          console.log(`[API] Discovery fetch by ${requesterId}: found ${allUsers.length} users`);
           const stripped = allUsers.map(u => ({
             id: u.id,
             name: u.name,
