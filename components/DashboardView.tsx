@@ -19,10 +19,11 @@ const formatRelativeTime = (dateString: string) => {
 };
 
 const DashboardView: React.FC = () => {
-  const { tasks, user, activities, projects, trackTaskVisit } = useApp();
+  const { tasks, user, activities, projects, trackTaskVisit, announcements, addAnnouncement } = useApp();
   const [aiSummary, setAiSummary] = useState("Analyzing project status...");
   const [activeTab, setActiveTab] = useState<'overview' | 'assignments' | 'calendar'>('overview');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [showNewAnnouncement, setShowNewAnnouncement] = useState(false);
 
   // Strict Filtering for Pulse
   const filteredTasks = tasks.filter(t => {
@@ -198,32 +199,65 @@ const DashboardView: React.FC = () => {
 
             {/* Sidebar Analytics - Functional Activity Feed */}
             <div className="space-y-8">
+              {/* Announcements Section */}
+              <div className="bg-indigo-900 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
+                <div className="flex justify-between items-center mb-4 relative z-10">
+                  <h3 className="text-xs font-black uppercase tracking-widest opacity-60">Broadcasts</h3>
+                  {user?.role !== UserRole.CLIENT && (
+                    <button onClick={() => setShowNewAnnouncement(true)} className="p-1 hover:bg-white/10 rounded-lg"><ICONS.Plus className="w-4 h-4" /></button>
+                  )}
+                </div>
+                <div className="space-y-4 relative z-10">
+                  {announcements.filter(a => a.target === 'ALL' || (user?.role === UserRole.CLIENT ? a.target === 'CLIENTS' : a.target === 'STAFF')).slice(0, 3).map(ann => (
+                    <div key={ann.id} className="p-3 bg-white/10 rounded-xl backdrop-blur-md border border-white/5">
+                      <h4 className="text-xs font-bold leading-tight">{ann.title}</h4>
+                      <p className="text-[10px] text-white/60 mt-1 line-clamp-2">{ann.content}</p>
+                    </div>
+                  ))}
+                  {announcements.length === 0 && <p className="text-[10px] opacity-40 italic">No recent broadcasts</p>}
+                </div>
+                <div className="absolute -bottom-4 -right-4 opacity-10"><ICONS.Bell className="w-20 h-20" /></div>
+              </div>
+
               <MiniCalendar tasks={filteredTasks} />
               <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm h-full flex flex-col">
-                <h3 className="font-bold text-gray-900 mb-6">Recent Activity</h3>
-                <div className="space-y-6 flex-1 overflow-y-auto max-h-[500px] pr-2 custom-scrollbar">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="font-bold text-gray-900">Recent Activity</h3>
+                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase tracking-wider">Live Feed</span>
+                </div>
+                <div className="space-y-0 flex-1 overflow-y-auto max-h-[80vh] pr-2 custom-scrollbar relative pl-4">
+                  {/* Timeline Line */}
+                  <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
+
                   {activities.length > 0 ? (
-                    activities.map((activity) => (
-                      <div key={activity.id} className="flex gap-4 animate-in slide-in-from-right-2">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 flex-shrink-0 overflow-hidden border border-slate-100 text-xs flex items-center justify-center font-bold text-slate-400">
-                          {activity.userAvatar ? <img src={activity.userAvatar} alt="" /> : activity.userName.charAt(0)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-900 font-medium truncate">{activity.userName}</p>
-                          <p className="text-xs text-gray-500 mt-0.5 break-words">{activity.action}</p>
-                          <p className="text-[10px] text-gray-400 mt-1 uppercase font-semibold">{formatRelativeTime(activity.createdAt)}</p>
+                    activities.map((activity, idx) => (
+                      <div key={activity.id} className="relative pl-6 pb-8 last:pb-0 animate-in slide-in-from-right-2" style={{ animationDelay: `${idx * 50}ms` }}>
+                        {/* Timeline Dot */}
+                        <div className="absolute left-0 top-1 w-2.5 h-2.5 rounded-full bg-white border-2 border-indigo-500 z-10 shadow-[0_0_0_2px_white]"></div>
+
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-gray-900">{activity.userName}</span>
+                              {idx === 0 && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 rounded font-bold">NEW</span>}
+                            </div>
+                            <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap bg-gray-50 px-1.5 py-0.5 rounded">{formatRelativeTime(activity.createdAt)}</span>
+                          </div>
+                          <p className="text-xs text-gray-600 leading-relaxed font-medium bg-slate-50/50 p-2 rounded-lg border border-slate-50/50">{activity.action}</p>
                         </div>
                       </div>
                     ))
                   ) : (
                     <div className="flex flex-col items-center justify-center py-10 text-center opacity-40">
-                      <ICONS.Clock className="w-8 h-8 mb-2" />
+                      <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                        <ICONS.Clock className="w-5 h-5 text-slate-400" />
+                      </div>
                       <p className="text-xs font-medium">No activity logged yet...</p>
                     </div>
                   )}
                 </div>
                 {activities.length > 0 && (
-                  <button className="w-full mt-8 py-2 text-sm text-emerald-600 font-semibold hover:underline border-t border-slate-50 pt-4">
+                  <button className="w-full mt-6 py-2.5 text-xs text-center text-slate-500 font-bold hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100">
                     View Full History
                   </button>
                 )}
@@ -271,6 +305,37 @@ const DashboardView: React.FC = () => {
         </div>
       )}
       {selectedTaskId && <TaskModal taskId={selectedTaskId} onClose={() => setSelectedTaskId(null)} />}
+      {showNewAnnouncement && (
+        <NewAnnouncementModal
+          onClose={() => setShowNewAnnouncement(false)}
+          onSubmit={(data) => addAnnouncement({ ...data, authorId: user?.id || '' })}
+        />
+      )}
+    </div>
+  );
+};
+
+const NewAnnouncementModal = ({ onClose, onSubmit }: any) => {
+  const [form, setForm] = useState({ title: '', content: '', target: 'ALL' });
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
+      <form onSubmit={(e) => { e.preventDefault(); onSubmit(form); onClose(); }} className="relative bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl animate-in zoom-in-95">
+        <h3 className="text-2xl font-bold text-black mb-6">Post Broadcast</h3>
+        <div className="space-y-4">
+          <input required placeholder="Announcement Title" className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm outline-none" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+          <textarea required placeholder="Write your message here..." rows={4} className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm outline-none" value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} />
+          <select className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm outline-none" value={form.target} onChange={e => setForm({ ...form, target: e.target.value })}>
+            <option value="ALL">Everyone</option>
+            <option value="STAFF">Internal Staff Only</option>
+            <option value="CLIENTS">All Clients Only</option>
+          </select>
+        </div>
+        <div className="flex gap-3 mt-8">
+          <button type="button" onClick={onClose} className="flex-1 py-4 text-sm font-bold text-gray-500 uppercase tracking-widest">Cancel</button>
+          <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-100 uppercase tracking-widest">Post Now</button>
+        </div>
+      </form>
     </div>
   );
 };
@@ -285,37 +350,58 @@ const MiniCalendar: React.FC<{ tasks: any[] }> = ({ tasks }) => {
   for (let i = 0; i < firstDayOfMonth; i++) days.push(null);
   for (let i = 1; i <= daysInMonth; i++) days.push(i);
 
-  const monthName = currentDate.toLocaleString('default', { month: 'short' });
+  const monthName = currentDate.toLocaleString('default', { month: 'long' });
 
   return (
     <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-bold text-gray-900 text-sm whitespace-nowrap uppercase tracking-wider">{monthName} {currentDate.getFullYear()}</h3>
-        <div className="flex gap-1">
-          <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-slate-100 rounded text-slate-400 transition-colors"><ICONS.ArrowRight className="w-3 h-3 rotate-180" /></button>
-          <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-slate-100 rounded text-slate-400 transition-colors"><ICONS.ArrowRight className="w-3 h-3" /></button>
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="font-bold text-gray-900 text-sm whitespace-nowrap uppercase tracking-wider flex items-center gap-2">
+          <ICONS.Calendar className="w-4 h-4 text-emerald-500" />
+          {monthName} <span className="text-slate-400 font-medium">{currentDate.getFullYear()}</span>
+        </h3>
+        <div className="flex gap-1 bg-slate-50 p-1 rounded-lg">
+          <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-white hover:shadow-sm rounded-md text-slate-400 transition-all"><ICONS.ArrowRight className="w-3 h-3 rotate-180" /></button>
+          <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-white hover:shadow-sm rounded-md text-slate-400 transition-all"><ICONS.ArrowRight className="w-3 h-3" /></button>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-y-3 gap-x-1">
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
-          <div key={d} className="text-[8px] font-black text-slate-300 text-center uppercase mb-1">{d}</div>
+          <div key={d} className="text-[9px] font-black text-slate-300 text-center uppercase">{d}</div>
         ))}
         {days.map((day, i) => {
           const dateStr = day ? `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : '';
-          const hasTasks = day && tasks.some(t => t.dueDate === dateStr);
+          const dayTasks = day ? tasks.filter(t => t.dueDate === dateStr) : [];
+          const taskCount = dayTasks.length;
           const isToday = day && day === new Date().getDate() && currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear();
+          const hasOverdue = dayTasks.some(t => new Date(t.dueDate) < new Date() && t.status !== 'COMPLETED');
 
           return (
-            <div key={i} className="aspect-square flex items-center justify-center relative">
+            <div key={i} className="flex flex-col items-center justify-center relative h-8">
               {day && (
                 <>
-                  <span className={`text-[10px] font-bold ${isToday ? 'bg-emerald-600 text-white w-5 h-5 flex items-center justify-center rounded-full shadow-lg shadow-emerald-100' : 'text-slate-600'}`}>{day}</span>
-                  {hasTasks && !isToday && <div className="absolute bottom-1 w-1 h-1 bg-indigo-400 rounded-full"></div>}
+                  <button
+                    className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold transition-all relative
+                       ${isToday
+                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200 scale-110 z-10'
+                        : 'text-slate-600 hover:bg-slate-50'
+                      }
+                     `}
+                  >
+                    {day}
+                    {taskCount > 0 && !isToday && (
+                      <div className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white ${hasOverdue ? 'bg-red-500' : 'bg-indigo-500'}`}></div>
+                    )}
+                  </button>
                 </>
               )}
             </div>
           );
         })}
+      </div>
+      <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center text-[9px] font-bold uppercase tracking-wider text-slate-400">
+        <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Today</div>
+        <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div> Task Due</div>
+        <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-red-500"></div> Overdue</div>
       </div>
     </div>
   );

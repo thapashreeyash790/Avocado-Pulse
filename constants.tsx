@@ -10,6 +10,7 @@ import {
   Paperclip,
   TrendingUp,
   LayoutDashboard,
+  Layout,
   Trello,
   Settings,
   Bell,
@@ -28,7 +29,12 @@ import {
   ListTodo,
   Archive,
   Home,
-  Activity
+  Activity,
+  X,
+  Trash,
+  Sun,
+  Moon,
+  Video
 } from 'lucide-react';
 
 export const ICONS = {
@@ -41,6 +47,7 @@ export const ICONS = {
   Paperclip,
   TrendingUp,
   LayoutDashboard,
+  Layout,
   Trello,
   Settings,
   Bell,
@@ -59,7 +66,12 @@ export const ICONS = {
   ListTodo,
   Archive,
   Home,
-  Activity
+  Activity,
+  X,
+  Trash,
+  Sun,
+  Moon,
+  Video
 };
 
 export const PRIORITY_COLORS = {

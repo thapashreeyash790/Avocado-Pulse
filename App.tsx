@@ -13,21 +13,28 @@ import ResetRequestView from './components/ResetRequestView';
 import ResetPasswordView from './components/ResetPasswordView';
 import ChatView from './components/ChatView';
 import DocsView from './components/DocsView';
+import LeadsView from './components/LeadsView';
+import SupportView from './components/SupportView';
 import MyStuffView from './components/MyStuffView';
+import LandingPage from './components/LandingPage';
+import CMSDashboard from './components/CMSDashboard';
+import DynamicLandingPage from './components/DynamicLandingPage';
 import { AppProvider, useApp } from './store/AppContext';
 import { ICONS } from './constants';
+import { UserRole } from './types';
 
 const AuthenticatedApp: React.FC = () => {
-
   const { user } = useApp();
-  console.log('[AuthenticatedApp] user:', user, typeof user);
+
   if (typeof user === 'undefined') {
     return <div style={{ color: 'red', padding: 20 }}>Critical error: user is undefined. Please check AppContext and localStorage. <br />Try clearing browser storage and reloading.</div>;
   }
+
   if (!user) {
-    return <LoginView />;
+    return <Navigate to="/" replace />;
   }
 
+  const isAdmin = user.role === UserRole.ADMIN;
 
   return (
     <Layout>
@@ -39,21 +46,30 @@ const AuthenticatedApp: React.FC = () => {
         <Route path="sales" element={<SalesView />} />
         <Route path="chat" element={<ChatView />} />
         <Route path="docs" element={<DocsView />} />
-        {/* <Route path="mystuff" element={<MyStuffView />} /> */}
-        <Route path="team" element={
-          <div className="p-8 flex items-center justify-center h-full">
-            <div className="text-center max-w-sm">
-              <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <ICONS.Users className="w-8 h-8 text-slate-300" />
-              </div>
-              <h2 className="text-xl font-bold text-slate-900">Team Directory</h2>
-              <p className="text-slate-500 text-sm mt-2">Manage workspace members and permissions. Feature fully active in management tab.</p>
-            </div>
-          </div>
-        } />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="leads" element={<LeadsView />} />
+        <Route path="support" element={<SupportView />} />
+        {isAdmin && <Route path="cms" element={<CMSDashboard />} />}
+        <Route path="*" element={<Navigate to="/app" replace />} />
       </Routes>
     </Layout>
+  );
+};
+
+const AppRoutes: React.FC = () => {
+  const { user } = useApp();
+
+  return (
+    <Routes>
+      <Route path="/" element={user ? <Navigate to="/app" replace /> : <LandingPage />} />
+      <Route path="/p/:slug" element={<DynamicLandingPage />} />
+      <Route path="/login" element={<LoginView initialIsLogin={true} />} />
+      <Route path="/signup" element={<LoginView initialIsLogin={false} />} />
+      <Route path="/verify" element={<VerifyEmailView />} />
+      <Route path="/reset-request" element={<ResetRequestView />} />
+      <Route path="/reset" element={<ResetPasswordView />} />
+      <Route path="/app/*" element={<AuthenticatedApp />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 };
 
@@ -61,12 +77,7 @@ const App: React.FC = () => {
   return (
     <AppProvider>
       <HashRouter>
-        <Routes>
-          <Route path="/verify" element={<VerifyEmailView />} />
-          <Route path="/reset-request" element={<ResetRequestView />} />
-          <Route path="/reset" element={<ResetPasswordView />} />
-          <Route path="/*" element={<AuthenticatedApp />} />
-        </Routes>
+        <AppRoutes />
       </HashRouter>
     </AppProvider>
   );

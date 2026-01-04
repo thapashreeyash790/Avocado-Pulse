@@ -8,6 +8,7 @@ export enum UserRole {
 export enum TaskStatus {
   TODO = 'TO_DO',
   IN_PROGRESS = 'IN_PROGRESS',
+  REVIEW = 'REVIEW',
   COMPLETED = 'COMPLETED'
 }
 
@@ -61,6 +62,7 @@ export interface User {
     taskId: string;
     visitedAt: string;
   }[];
+  customFields?: Record<string, any>;
 }
 
 export interface Conversation {
@@ -89,16 +91,23 @@ export interface ClientProfile {
   name: string;
   company: string;
   email: string;
+  phone?: string;
+  address?: string;
+  customFields?: Record<string, any>;
 }
 
 export interface Project {
   id: string;
   name: string;
+  description?: string;
   clientId: string; // Client email
   budget: number;
   currency: string;
   startDate: string;
   endDate: string;
+  status: 'ACTIVE' | 'ARCHIVED';
+  members: string[]; // User IDs
+  customFields?: Record<string, any>;
 }
 
 export interface Invoice {
@@ -146,6 +155,107 @@ export interface AppNotification {
   read: boolean;
 }
 
+export enum LeadStatus {
+  NEW = 'NEW',
+  CONTACTED = 'CONTACTED',
+  QUALIFIED = 'QUALIFIED',
+  PROPOSAL = 'PROPOSAL',
+  CONVERTED = 'CONVERTED',
+  LOST = 'LOST'
+}
+
+export interface Lead {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  company?: string;
+  status: LeadStatus;
+  source: string;
+  notes: string;
+  assignedTo?: string; // User ID
+  createdAt: string;
+  updatedAt: string;
+  customFields?: Record<string, any>;
+}
+
+export interface Expense {
+  id: string;
+  projectId?: string;
+  clientId?: string;
+  title: string;
+  amount: number;
+  category: string;
+  date: string;
+  billed: boolean;
+  status: 'PENDING' | 'REIMBURSED' | 'BILLABLE';
+  receipt?: string;
+}
+
+export interface Estimate {
+  id: string;
+  clientId: string;
+  projectId?: string;
+  items: Array<{
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    amount: number;
+  }>;
+  tax: number;
+  total: number;
+  status: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'INVOICED';
+  date: string;
+  expiryDate: string;
+}
+
+export enum TicketStatus {
+  OPEN = 'OPEN',
+  IN_PROGRESS = 'IN_PROGRESS',
+  RESOLVED = 'RESOLVED',
+  CLOSED = 'CLOSED'
+}
+
+export enum TicketPriority {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  URGENT = 'URGENT'
+}
+
+export interface SupportTicket {
+  id: string;
+  clientId: string;
+  projectId?: string;
+  subject: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  assignedTo?: string; // Staff ID
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  target: 'ALL' | 'STAFF' | 'CLIENTS';
+  authorId: string;
+  createdAt: string;
+}
+
+export interface TimeEntry {
+  id: string;
+  userId: string;
+  taskId: string;
+  startTime: string; // ISO
+  endTime?: string; // ISO
+  duration: number; // minutes
+  isBillable: boolean;
+  billed: boolean;
+}
+
 export interface Task {
   id: string;
   projectId: string;
@@ -153,7 +263,9 @@ export interface Task {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
-  assignedTo: string;
+  assignedTo: string; // Primary lead
+  assignees: string[]; // Multiple staff members
+  followers: string[]; // View only users
   dueDate: string;
   progress: number;
   checklist: ChecklistItem[];
@@ -161,6 +273,9 @@ export interface Task {
   approvalStatus?: ApprovalStatus;
   cost?: number;
   files: string[];
+  trackTime?: boolean;
+  totalTimeLogged?: number; // minutes
+  customFields?: Record<string, any>;
 }
 
 export interface Doc {
@@ -171,4 +286,38 @@ export interface Doc {
   ownerId: string;
   sharedWith: string[]; // email or id
   createdAt: string;
+}
+
+export interface CustomFieldDefinition {
+  id: string;
+  resource: 'TASK' | 'PROJECT' | 'LEAD' | 'USER' | 'CLIENT';
+  name: string;
+  type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT';
+  options?: string[]; // for SELECT
+  required: boolean;
+}
+
+export interface WorkspaceSettings {
+  id: 'current_settings';
+  logoUrl?: string;
+  primaryColor?: string; // e.g. indigo-600
+  companyName: string;
+  supportEmail: string;
+  customFieldDefinitions: CustomFieldDefinition[];
+}
+export interface CMSSection {
+  id: string;
+  type: 'HERO' | 'NARRATIVE' | 'PRICING' | 'FAQ' | 'TESTIMONIALS' | 'FEATURES';
+  content: any;
+  order: number;
+}
+
+export interface CMSPage {
+  id: string;
+  slug: string;
+  title: string;
+  status: 'DRAFT' | 'PUBLISHED';
+  sections: CMSSection[];
+  createdAt: string;
+  updatedAt: string;
 }

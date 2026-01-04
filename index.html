@@ -1,35 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Avocado Project manager - Work Transparency</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script>
-      // Error handling overlay for debugging boot issues
-      window.onerror = function(msg, url, line, col, error) {
-        const errorDiv = document.createElement('div');
-        errorDiv.style = "position:fixed;top:0;left:0;width:100%;background:#fee2e2;color:#b91c1c;padding:20px;z-index:9999;font-family:monospace;border-bottom:2px solid #ef4444;white-space:pre-wrap;";
-        errorDiv.innerHTML = `<strong>App Failed to Load:</strong> ${msg}\n<small>Location: ${url}:${line}:${col}</small>`;
-        document.body.appendChild(errorDiv);
-      };
 
-      // Critical Node.js environment shims
-      window.process = { 
-        env: { NODE_ENV: 'production' },
-        cwd: () => '/',
-        browser: true,
-        version: '',
-        nextTick: (fn) => setTimeout(fn, 0)
-      };
-    </script>
-    <style>
-      body {
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Avocado Project manager - Work Transparency</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            border: "hsl(var(--border))",
+            background: "hsl(var(--background))",
+            foreground: "hsl(var(--foreground))",
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    // Error handling overlay for debugging boot issues
+    window.onerror = function (msg, url, line, col, error) {
+      const errorDiv = document.createElement('div');
+      errorDiv.style = "position:fixed;top:0;left:0;width:100%;background:#fee2e2;color:#b91c1c;padding:20px;z-index:9999;font-family:monospace;border-bottom:2px solid #ef4444;white-space:pre-wrap;";
+      errorDiv.innerHTML = `<strong>App Failed to Load:</strong> ${msg}\n<small>Location: ${url}:${line}:${col}</small>`;
+      document.body.appendChild(errorDiv);
+    };
+
+    // Critical Node.js environment shims
+    window.process = {
+      env: { NODE_ENV: 'production' },
+      cwd: () => '/',
+      browser: true,
+      version: '',
+      nextTick: (fn) => setTimeout(fn, 0)
+    };
+  </script>
+  <style type="text/tailwindcss">
+    body {
         font-family: 'Inter', sans-serif;
-        background-color: #f9fafb;
+        @apply bg-gray-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-300;
         margin: 0;
       }
       #root:empty {
@@ -57,8 +72,10 @@
     </style>
   <link rel="stylesheet" href="/index.css">
 </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
 </body>
+
 </html>

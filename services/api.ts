@@ -2,7 +2,7 @@
 import { User, UserRole, Task, Project, ClientProfile, Invoice } from '../types';
 
 // Use Vite's import.meta.env with correct typing
-const API_BASE = (import.meta as any).env?.VITE_API_URL || '';
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:4000';
 
 async function safeFetch(path: string, options?: RequestInit) {
   const currentUserRaw = localStorage.getItem('avocado_current_user');

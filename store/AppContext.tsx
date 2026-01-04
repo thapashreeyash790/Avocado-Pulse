@@ -1,6 +1,6 @@
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { Task, TaskStatus, UserRole, ApprovalStatus, User, Activity, AppNotification, Project, ClientProfile, Invoice, TaskPriority, Conversation, Message, Doc } from '../types';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { Task, TaskStatus, UserRole, ApprovalStatus, User, Activity, AppNotification, Project, ClientProfile, Invoice, TaskPriority, Conversation, Message, Doc, TimeEntry, Lead, LeadStatus, Expense, Estimate, SupportTicket, TicketStatus, TicketPriority, Announcement, WorkspaceSettings, CustomFieldDefinition, CMSPage } from '../types';
 import { api } from '../services/api';
 import * as crypto from '../services/crypto';
 
@@ -27,6 +27,7 @@ interface AppContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, role: UserRole, name: string) => Promise<any>;
   logout: () => void;
+  updateTask: (taskId: string, updates: Partial<Task>) => Promise<void>;
   updateTaskStatus: (taskId: string, status: TaskStatus) => Promise<void>;
   addTask: (task: Partial<Task>) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
@@ -58,6 +59,39 @@ interface AppContextType {
   toggleBookmark: (resourceId: string) => Promise<void>;
   addBoost: (targetUserId: string, message: string) => Promise<void>;
   saveDraft: (type: string, content: any) => Promise<void>;
+  archiveProject: (projectId: string) => Promise<void>;
+  logTime: (taskId: string, minutes: number, date?: string) => Promise<void>;
+  toggleTaskFollower: (taskId: string, userId: string) => Promise<void>;
+  updateTaskAssignees: (taskId: string, assignees: string[]) => Promise<void>;
+  leads: Lead[];
+  addLead: (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateLead: (leadId: string, updates: Partial<Lead>) => Promise<void>;
+  updateLeadStatus: (leadId: string, status: LeadStatus) => Promise<void>;
+  convertLeadToClient: (leadId: string) => Promise<void>;
+  expenses: Expense[];
+  estimates: Estimate[];
+  addExpense: (expense: Omit<Expense, 'id'>) => Promise<void>;
+  addEstimate: (estimate: Omit<Estimate, 'id'>) => Promise<void>;
+  convertEstimateToInvoice: (estimateId: string) => Promise<void>;
+  tickets: SupportTicket[];
+  addTicket: (ticket: Omit<SupportTicket, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateTicketStatus: (ticketId: string, status: TicketStatus) => Promise<void>;
+  announcements: Announcement[];
+  addAnnouncement: (announcement: Omit<Announcement, 'id' | 'createdAt'>) => Promise<void>;
+  settings: WorkspaceSettings | null;
+  updateSettings: (settings: Partial<WorkspaceSettings>) => Promise<void>;
+  cmsPages: CMSPage[];
+  fetchCMSPages: () => Promise<void>;
+  saveCMSPage: (page: Partial<CMSPage>) => Promise<void>;
+  deleteCMSPage: (pageId: string) => Promise<void>;
+  deleteInvoice: (invoiceId: string) => Promise<void>;
+  deleteEstimate: (estimateId: string) => Promise<void>;
+  deleteExpense: (expenseId: string) => Promise<void>;
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+  activeTimer: { taskId: string; startTime: number; taskTitle: string } | null;
+  startTimer: (taskId: string, taskTitle: string) => void;
+  stopTimer: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -101,7 +135,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
+  const [cmsPages, setCmsPages] = useState<CMSPage[]>([]);
   const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null);
+
+  // Theme State
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('avocado_theme') as 'light' | 'dark') || 'light';
+  });
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => {
+      const next = prev === 'light' ? 'dark' : 'light';
+      localStorage.setItem('avocado_theme', next);
+      if (next === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      return next;
+    });
+  }, []);
+
+  // Initialize theme on mount
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  // Persistent Timer State
+  const [activeTimer, setActiveTimer] = useState<{ taskId: string; startTime: number; taskTitle: string } | null>(() => {
+    const saved = localStorage.getItem('avocado_active_timer');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  useEffect(() => {
+    if (activeTimer) {
+      localStorage.setItem('avocado_active_timer', JSON.stringify(activeTimer));
+    } else {
+      localStorage.removeItem('avocado_active_timer');
+    }
+  }, [activeTimer]);
+
 
   const pushNotification = useCallback((message: string, type: AppNotification['type'] = 'info') => {
     const newNotif: AppNotification = {
@@ -140,52 +224,117 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [user]);
 
+  // Cache for preventing unnecessary re-renders
+  const lastFetchedRef = useRef<any>({});
+
   const loadAllData = useCallback(async () => {
     if (!user) return;
     const perms = user.permissions || { billing: true, projects: true, timeline: true, management: false, messages: true, docs: true };
     const isAdmin = user.role === UserRole.ADMIN;
 
-    try {
-      const [fProjects, fClients, fInvoices, fTasks, fUsers, fConvs, fDocs, fActivities] = await Promise.all([
-        (isAdmin || perms.projects !== false) ? api.fetchProjects() : Promise.resolve([]),
-        (isAdmin || perms.management === true) ? api.fetchClients() : Promise.resolve([]),
-        (isAdmin || perms.billing !== false) ? api.fetchInvoices() : Promise.resolve([]),
-        (isAdmin || perms.timeline !== false) ? api.fetchTasks() : Promise.resolve([]),
-        api.fetchUsers(), // Fetch all users (stripped by backend if not admin)
-        api.fetchConversations(),
-        api.fetchResource('docs'),
-        api.fetchResource('activities')
-      ]);
-      setProjects(fProjects || []);
-      setClients(fClients || []);
-      setInvoices(fInvoices || []);
-      setTasks(fTasks || []);
-      setAllUsers(fUsers || []);
-      setTeam(fUsers?.filter((u: any) => u.role !== UserRole.CLIENT) || []);
+    // Helper to safely fetch, logging errors but returning empty array
+    const safeRequest = async (promise: Promise<any>, name: string) => {
+      try {
+        return await promise;
+      } catch (e) {
+        console.warn(`Failed to load ${name}:`, e);
+        return [];
+      }
+    };
 
-      // Decrypt Conversation Previews
-      if (fConvs && privateKey) {
-        const decryptedConvs = await Promise.all(fConvs.map(async (c: any) => {
-          if (c.lastMessage && c.lastMessage.text) {
-            try {
-              const decryptedText = await crypto.decryptForMe(c.lastMessage.text, privateKey, user.id);
-              return { ...c, lastMessage: { ...c.lastMessage, text: decryptedText } };
-            } catch (e) {
-              return c;
-            }
-          }
-          return c;
-        }));
-        setConversations(decryptedConvs);
-      } else {
-        setConversations(fConvs || []);
+    try {
+      const [fProjects, fClients, fInvoices, fTasks, fUsers, fConvs, fDocs, fActivities, fTime, fLeads, fExpenses, fEstimates, fTickets, fAnnouncements, fSettings, fPages] = await Promise.all([
+        safeRequest((isAdmin || perms.projects !== false) ? api.fetchProjects() : Promise.resolve([]), 'projects'),
+        safeRequest((isAdmin || perms.management === true) ? api.fetchClients() : Promise.resolve([]), 'clients'),
+        safeRequest((isAdmin || perms.billing !== false) ? api.fetchInvoices() : Promise.resolve([]), 'invoices'),
+        safeRequest((isAdmin || perms.timeline !== false) ? api.fetchTasks() : Promise.resolve([]), 'tasks'),
+        safeRequest(api.fetchUsers(), 'users'),
+        safeRequest(api.fetchConversations(), 'conversations'),
+        safeRequest(api.fetchResource('docs'), 'docs'),
+        safeRequest(api.fetchResource('activities'), 'activities'),
+        safeRequest(api.fetchResource('timeEntry'), 'timeEntry'),
+        safeRequest(api.fetchResource('leads'), 'leads'),
+        safeRequest(api.fetchResource('expenses'), 'expenses'),
+        safeRequest(api.fetchResource('estimates'), 'estimates'),
+        safeRequest(api.fetchResource('tickets'), 'tickets'),
+        safeRequest(api.fetchResource('announcements'), 'announcements'),
+        safeRequest(api.fetchResource('settings'), 'settings'),
+        safeRequest(api.fetchResource('pages'), 'pages')
+      ]);
+
+      // Optimize State Updates: Only set state if data changed
+      const updateIfChanged = (key: string, newData: any, setter: (data: any) => void) => {
+        const str = JSON.stringify(newData);
+        if (lastFetchedRef.current[key] !== str) {
+          lastFetchedRef.current[key] = str;
+          setter(newData);
+          return true;
+        }
+        return false;
+      };
+
+      updateIfChanged('projects', fProjects || [], setProjects);
+      updateIfChanged('clients', fClients || [], setClients);
+      updateIfChanged('invoices', fInvoices || [], setInvoices);
+      updateIfChanged('tasks', fTasks || [], setTasks);
+      updateIfChanged('users', fUsers || [], setAllUsers);
+
+      // Special handling for Team derived state
+      const teamData = fUsers?.filter((u: any) => u.role !== UserRole.CLIENT) || [];
+      if (JSON.stringify(teamData) !== lastFetchedRef.current['team']) {
+        lastFetchedRef.current['team'] = JSON.stringify(teamData);
+        setTeam(teamData);
       }
 
-      setDocs(fDocs || []);
-      setActivities(fActivities?.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || []);
+      // Decrypt Conversation Previews ONLY if conversations changed
+      if (fConvs && privateKey) {
+        const convsStr = JSON.stringify(fConvs);
+        if (lastFetchedRef.current['raw_convs'] !== convsStr) {
+          lastFetchedRef.current['raw_convs'] = convsStr;
+          const decryptedConvs = await Promise.all(fConvs.map(async (c: any) => {
+            if (c.lastMessage && c.lastMessage.text) {
+              try {
+                const decryptedText = await crypto.decryptForMe(c.lastMessage.text, privateKey, user.id);
+                return { ...c, lastMessage: { ...c.lastMessage, text: decryptedText } };
+              } catch (e) {
+                return c;
+              }
+            }
+            return c;
+          }));
+          setConversations(decryptedConvs);
+        }
+      } else {
+        updateIfChanged('conversations', fConvs || [], setConversations);
+      }
+
+      updateIfChanged('docs', fDocs || [], setDocs);
+      updateIfChanged('activities', fActivities?.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [], setActivities);
+      updateIfChanged('timeEntry', fTime || [], setTimeEntries);
+      updateIfChanged('leads', fLeads || [], setLeads);
+      updateIfChanged('expenses', fExpenses || [], setExpenses);
+      updateIfChanged('estimates', fEstimates || [], setEstimates);
+      updateIfChanged('tickets', fTickets || [], setTickets);
+      updateIfChanged('announcements', fAnnouncements || [], setAnnouncements);
+      updateIfChanged('pages', fPages || [], setCmsPages);
+
+      if (fSettings && fSettings.length > 0) {
+        updateIfChanged('settings', fSettings[0], setSettings);
+      } else {
+        // Default settings logic...
+        const defaultSettings = {
+          id: 'current_settings',
+          companyName: 'Avocado Inc',
+          supportEmail: 'support@avocado.com',
+          customFieldDefinitions: []
+        };
+        updateIfChanged('settings', defaultSettings, setSettings);
+      }
     } catch (err: any) {
       console.error('Load failed:', err);
-      pushNotification(`Connection failed: ${err.message || err}`, 'error');
+      // Only show error notification if it's NOT a background poll (hard to distinguish here, but preventing spam is good)
+      // pushNotification(`Connection failed: ${err.message || err}`, 'error');
+
       // fallback to previously cached data in localStorage if server unreachable
       const savedProjects = localStorage.getItem('avocado_projects');
       const savedClients = localStorage.getItem('avocado_clients');
@@ -511,6 +660,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const fetchCMSPages = useCallback(async () => {
+    try {
+      const pages = await api.fetchResource('pages');
+      setCmsPages(pages);
+    } catch (err) {
+      console.error('Failed to fetch CMS pages', err);
+    }
+  }, []);
+
+  const saveCMSPage = async (page: Partial<CMSPage>) => {
+    try {
+      let result;
+      if (page.id) {
+        result = await api.updateResource('pages', page.id, page);
+        setCmsPages(prev => prev.map(p => p.id === page.id ? result : p));
+      } else {
+        const newPage = {
+          ...page,
+          id: Math.random().toString(36).substr(2, 9),
+          createdAt: new Date().toISOString()
+        };
+        result = await api.createResource('pages', newPage);
+        setCmsPages(prev => [...prev, result]);
+      }
+      pushNotification('Page saved successfully', 'success');
+    } catch (err: any) {
+      pushNotification(`Failed to save page: ${err.message}`, 'error');
+    }
+  };
+
+  const deleteCMSPage = async (pageId: string) => {
+    if (!window.confirm('Are you sure you want to delete this page?')) return;
+    try {
+      await api.deleteResource('pages', pageId);
+      setCmsPages(prev => prev.filter(p => p.id !== pageId));
+      pushNotification('Page deleted', 'success');
+    } catch (err: any) {
+      pushNotification(`Deletion failed: ${err.message}`, 'error');
+    }
+  };
+
   const addProject = async (project: Omit<Project, 'id'>) => {
     try {
       const created = await api.createProject(project);
@@ -538,11 +728,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const generateInvoice = async (projectId: string) => {
-    console.log('[generateInvoice] Request for project:', projectId);
     const project = projects.find(p => p.id === projectId);
     if (!project) {
-      console.error('[generateInvoice] Project not found in state:', projectId);
-      pushNotification('Error: Project data not found. Try refreshing.', 'error');
+      pushNotification('Error: Project data not found.', 'error');
       return;
     }
     try {
@@ -554,12 +742,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         date: new Date().toISOString(),
         dueDate: new Date(Date.now() + 1209600000).toISOString()
       };
-      console.log('[generateInvoice] Creating payload:', payload);
       const created = await api.createInvoice(payload);
       setInvoices(prev => [...prev, created]);
       pushNotification(`Invoice generated for ${project.name}`, 'success');
     } catch (err: any) {
-      pushNotification(`Failed to create invoice: ${err.message || err}`, 'warning');
+      pushNotification(`Failed to create invoice: ${err.message}`, 'warning');
     }
   };
 
@@ -588,11 +775,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const isAdmin = user?.role === UserRole.ADMIN;
   const isInternal = user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN;
 
-  const filteredProjects = isInternal
-    ? projects
-    : projects.filter(p => p.clientId?.toLowerCase() === user?.email?.toLowerCase());
+  const filteredProjects = projects.filter(p => {
+    const isVisible = (isAdmin || user?.accessibleProjects?.includes(p.id) || p.clientId === user?.email);
+    const isNotArchived = p.status !== 'ARCHIVED';
+    return isVisible && isNotArchived;
+  });
 
   const filteredTasks = isInternal
     ? tasks
@@ -602,18 +792,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ? invoices
     : invoices.filter(inv => filteredProjects.some(p => p.id === inv.projectId));
 
+  const updateTask = useCallback(async (taskId: string, updates: Partial<Task>) => {
+    try {
+      const updated = await api.updateResource('tasks', taskId, updates);
+      setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
+      pushNotification('Task updated successfully', 'success');
+    } catch (err: any) {
+      pushNotification('Failed to update task', 'error');
+    }
+  }, []);
+
   const updateTaskStatus = useCallback(async (taskId: string, status: TaskStatus) => {
     const prevTask = tasks.find(t => t.id === taskId);
     if (!prevTask) return;
     logActivity(`moved "${prevTask.title}" to ${status.replace('_', ' ')}`, 'STATUS', taskId, prevTask.title);
-    const updatedTask = { ...prevTask, status, progress: status === TaskStatus.COMPLETED ? 100 : prevTask.progress, approvalStatus: status === TaskStatus.COMPLETED ? ApprovalStatus.PENDING : undefined };
-    setTasks(prev => prev.map(t => t.id === taskId ? updatedTask : t));
-    try {
-      await api.updateTask(taskId, updatedTask);
-    } catch (err: any) {
-      pushNotification(`Failed to update task on server: ${err.message || err}`, 'warning');
-    }
-  }, [logActivity, tasks]);
+    const updates = { status, progress: status === TaskStatus.COMPLETED ? 100 : prevTask.progress, approvalStatus: status === TaskStatus.COMPLETED ? ApprovalStatus.PENDING : undefined };
+    await updateTask(taskId, updates);
+  }, [logActivity, tasks, updateTask]);
 
   const addTask = useCallback(async (task: Partial<Task>) => {
     // Only allow clients to add tasks, not edit/delete/update
@@ -904,6 +1099,75 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushNotification(`Boost sent to ${target.name}!`, 'success');
   }, [user, allUsers, pushNotification]);
 
+  const archiveProject = useCallback(async (projectId: string) => {
+    try {
+      await api.updateResource('projects', projectId, { status: 'ARCHIVED' });
+      setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: 'ARCHIVED' } : p));
+      pushNotification('Project archived successfully', 'success');
+    } catch (err: any) {
+      pushNotification(`Failed to archive project: ${err.message}`, 'error');
+    }
+  }, []);
+
+  const logTime = useCallback(async (taskId: string, minutes: number, date?: string) => {
+    if (!user) return;
+    try {
+      const entry = await api.createResource('timeEntry', {
+        userId: user.id,
+        taskId,
+        duration: minutes,
+        startTime: date || new Date().toISOString(),
+        isBillable: true,
+        billed: false
+      });
+      setTimeEntries(prev => [...prev, entry]);
+
+      // Update task totalTimeLogged
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        const newTotal = (task.totalTimeLogged || 0) + minutes;
+        await api.updateTask(taskId, { totalTimeLogged: newTotal });
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, totalTimeLogged: newTotal } : t));
+      }
+      pushNotification('Time logged successfully', 'success');
+    } catch (err: any) {
+      pushNotification('Failed to log time', 'error');
+    }
+  }, [user, tasks]);
+
+  const startTimer = useCallback((taskId: string, taskTitle: string) => {
+    setActiveTimer({ taskId, startTime: Date.now(), taskTitle });
+  }, []);
+
+  const stopTimer = useCallback(async () => {
+    if (!activeTimer) return;
+    const elapsed = Date.now() - activeTimer.startTime;
+    const minutes = Math.ceil(elapsed / 1000 / 60);
+
+    if (minutes > 0) {
+      await logTime(activeTimer.taskId, minutes);
+      pushNotification(`Logged ${minutes}m for "${activeTimer.taskTitle}"`, 'success');
+    }
+    setActiveTimer(null);
+  }, [activeTimer, logTime, pushNotification]);
+
+  const toggleTaskFollower = useCallback(async (taskId: string, userId: string) => {
+    try {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+      const followers = [...(task.followers || [])];
+      const idx = followers.indexOf(userId);
+      if (idx === -1) followers.push(userId);
+      else followers.splice(idx, 1);
+
+      await api.updateTask(taskId, { followers });
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, followers } : t));
+      pushNotification('Task followers updated', 'success');
+    } catch (err: any) {
+      pushNotification('Failed to update followers', 'error');
+    }
+  }, [tasks]);
+
   const saveDraft = useCallback(async (type: string, content: any) => {
     if (!user) return;
     const drafts = [...(user.drafts || [])];
@@ -912,6 +1176,192 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     else drafts.push({ type, content, updatedAt: new Date().toISOString() });
     await updateUser(user.id, { drafts });
   }, [user, updateUser]);
+
+  const updateTaskAssignees = useCallback(async (taskId: string, assignees: string[]) => {
+    try {
+      await api.updateTask(taskId, { assignees });
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, assignees } : t));
+      pushNotification('Assignees updated', 'success');
+    } catch (err: any) {
+      pushNotification('Failed to update assignees', 'error');
+    }
+  }, []);
+
+  const addLead = useCallback(async (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const created = await api.createResource('leads', lead);
+      setLeads(prev => [...prev, created]);
+      pushNotification('Lead added successfully', 'success');
+    } catch (err: any) {
+      pushNotification('Failed to add lead', 'error');
+    }
+  }, []);
+
+  const updateLead = useCallback(async (leadId: string, updates: Partial<Lead>) => {
+    try {
+      const updated = await api.updateResource('leads', leadId, updates);
+      setLeads(prev => prev.map(l => l.id === leadId ? updated : l));
+      pushNotification('Lead updated', 'success');
+    } catch (err: any) {
+      pushNotification('Failed to update lead', 'error');
+    }
+  }, []);
+
+  const updateLeadStatus = useCallback(async (leadId: string, status: LeadStatus) => {
+    try {
+      await updateLead(leadId, { status, updatedAt: new Date().toISOString() });
+    } catch (err: any) {
+      // already handled in updateLead
+    }
+  }, [updateLead]);
+
+  const convertLeadToClient = useCallback(async (leadId: string) => {
+    try {
+      const lead = leads.find(l => l.id === leadId);
+      if (!lead) return;
+
+      // 1. Create client
+      const client = await api.createClient({
+        name: lead.name,
+        email: lead.email,
+        company: lead.company || 'Converted Lead',
+        phone: lead.phone,
+        address: ''
+      });
+      setClients(prev => [...prev, client]);
+
+      // 2. Mark lead as converted
+      const updatedLead = await api.updateResource('leads', leadId, { status: LeadStatus.CONVERTED, updatedAt: new Date().toISOString() });
+      setLeads(prev => prev.map(l => l.id === leadId ? updatedLead : l));
+
+      pushNotification('Lead successfully converted to client!', 'success');
+    } catch (err: any) {
+      pushNotification('Conversion failed', 'error');
+    }
+  }, [leads]);
+
+  const addExpense = useCallback(async (expense: Omit<Expense, 'id'>) => {
+    try {
+      const created = await api.createResource('expenses', expense);
+      setExpenses(prev => [...prev, created]);
+      pushNotification('Expense recorded', 'success');
+    } catch (err: any) {
+      pushNotification('Failed to record expense', 'error');
+    }
+  }, []);
+
+  const addEstimate = useCallback(async (estimate: Omit<Estimate, 'id'>) => {
+    try {
+      const created = await api.createResource('estimates', estimate);
+      setEstimates(prev => [...prev, created]);
+      pushNotification('Estimate created', 'success');
+    } catch (err: any) {
+      pushNotification('Failed to create estimate', 'error');
+    }
+  }, []);
+
+  const convertEstimateToInvoice = useCallback(async (estimateId: string) => {
+    try {
+      const est = estimates.find(e => e.id === estimateId);
+      if (!est) return;
+
+      const invoicePayload = {
+        projectId: est.projectId,
+        clientId: est.clientId,
+        amount: est.total,
+        paidAmount: 0,
+        status: 'PENDING',
+        date: new Date().toISOString(),
+        dueDate: new Date(Date.now() + 1209600000).toISOString()
+      };
+
+      const inv = await api.createInvoice(invoicePayload);
+      setInvoices(prev => [...prev, inv]);
+
+      // Mark estimate as invoiced
+      const updatedEst = await api.updateResource('estimates', estimateId, { status: 'INVOICED' });
+      setEstimates(prev => prev.map(e => e.id === estimateId ? updatedEst : e));
+
+      pushNotification('Estimate converted to invoice!', 'success');
+    } catch (err: any) {
+      pushNotification('Conversion failed', 'error');
+    }
+  }, [estimates]);
+
+  const deleteInvoice = useCallback(async (invoiceId: string) => {
+    if (!window.confirm('Are you sure you want to delete this invoice?')) return;
+    try {
+      await api.deleteResource('invoices', invoiceId);
+      setInvoices(prev => prev.filter(i => i.id !== invoiceId));
+      pushNotification('Invoice deleted', 'success');
+    } catch (err: any) {
+      pushNotification(`Deletion failed: ${err.message}`, 'error');
+    }
+  }, []);
+
+  const deleteEstimate = useCallback(async (estimateId: string) => {
+    if (!window.confirm('Are you sure you want to delete this estimate?')) return;
+    try {
+      await api.deleteResource('estimates', estimateId);
+      setEstimates(prev => prev.filter(e => e.id !== estimateId));
+      pushNotification('Estimate deleted', 'success');
+    } catch (err: any) {
+      pushNotification(`Deletion failed: ${err.message}`, 'error');
+    }
+  }, []);
+
+  const deleteExpense = useCallback(async (expenseId: string) => {
+    if (!window.confirm('Are you sure you want to delete this expense?')) return;
+    try {
+      await api.deleteResource('expenses', expenseId);
+      setExpenses(prev => prev.filter(e => e.id !== expenseId));
+      pushNotification('Expense deleted', 'success');
+    } catch (err: any) {
+      pushNotification(`Deletion failed: ${err.message}`, 'error');
+    }
+  }, []);
+
+  const addTicket = useCallback(async (ticket: Omit<SupportTicket, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const created = await api.createResource('tickets', ticket);
+      setTickets(prev => [...prev, created]);
+      pushNotification('Ticket submitted', 'success');
+    } catch (err: any) {
+      pushNotification('Failed to submit ticket', 'error');
+    }
+  }, []);
+
+  const updateTicketStatus = useCallback(async (ticketId: string, status: TicketStatus) => {
+    try {
+      const updated = await api.updateResource('tickets', ticketId, { status, updatedAt: new Date().toISOString() });
+      setTickets(prev => prev.map(t => t.id === ticketId ? updated : t));
+      pushNotification(`Ticket ${status}`, 'success');
+    } catch (err: any) {
+      pushNotification('Failed to update ticket', 'error');
+    }
+  }, []);
+
+  const addAnnouncement = useCallback(async (announcement: Omit<Announcement, 'id' | 'createdAt'>) => {
+    try {
+      const created = await api.createResource('announcements', announcement);
+      setAnnouncements(prev => [created, ...prev]);
+      pushNotification('Announcement posted', 'success');
+    } catch (err: any) {
+      pushNotification('Failed to post announcement', 'error');
+    }
+  }, []);
+
+  const updateSettings = useCallback(async (newSettings: Partial<WorkspaceSettings>) => {
+    try {
+      if (!settings) return;
+      // We use a fixed ID for settings
+      const updated = await api.updateResource('settings', 'current_settings', newSettings);
+      setSettings(updated);
+      pushNotification('Workspace settings updated', 'success');
+    } catch (err: any) {
+      pushNotification('Failed to update settings', 'error');
+    }
+  }, [settings]);
 
   return (
     <AppContext.Provider value={{
@@ -923,7 +1373,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       markNotificationsAsRead, dismissNotification, verifyOTP, inviteTeamMember, removeTeamMember, cancelSignup, resendOTP,
       updateUser, requestEmailUpdate, confirmEmailUpdate,
       sendMessage, selectConversation, createConversation, addDoc, shareDoc,
-      trackTaskVisit, toggleBookmark, addBoost, saveDraft
+      trackTaskVisit, toggleBookmark, addBoost, saveDraft,
+      archiveProject, logTime, toggleTaskFollower, updateTaskAssignees,
+      updateTask,
+      leads, addLead, updateLead, updateLeadStatus, convertLeadToClient,
+      expenses, addExpense, estimates, addEstimate, convertEstimateToInvoice,
+      tickets, addTicket, updateTicketStatus, announcements, addAnnouncement,
+      settings, updateSettings,
+      cmsPages,
+      fetchCMSPages,
+      saveCMSPage,
+      deleteCMSPage,
+      deleteInvoice,
+      deleteEstimate,
+      deleteExpense,
+      theme,
+      toggleTheme,
+      activeTimer,
+      startTimer,
+      stopTimer
     }}>
       {children}
     </AppContext.Provider>

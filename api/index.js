@@ -50,7 +50,12 @@ const userSchema = new mongoose.Schema({
   },
   publicKey: String,
   lastActive: { type: Date, default: Date.now },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  bookmarks: [String],
+  drafts: [mongoose.Schema.Types.Mixed],
+  boosts: [mongoose.Schema.Types.Mixed],
+  visitedTasks: [mongoose.Schema.Types.Mixed],
+  customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
 });
 
 const clientSchema = new mongoose.Schema({
@@ -58,17 +63,24 @@ const clientSchema = new mongoose.Schema({
   name: String,
   email: { type: String, required: true, unique: true },
   company: String,
-  createdAt: { type: Date, default: Date.now }
+  phone: String,
+  address: String,
+  createdAt: { type: Date, default: Date.now },
+  customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
 });
 
 const projectSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: String,
+  description: String,
   clientId: { type: String },
   budget: Number,
   currency: String,
   startDate: String,
-  endDate: String
+  endDate: Date,
+  status: { type: String, enum: ['ACTIVE', 'ARCHIVED'], default: 'ACTIVE' },
+  members: { type: [String], default: [] },
+  customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
 });
 
 const taskSchema = new mongoose.Schema({
@@ -76,15 +88,20 @@ const taskSchema = new mongoose.Schema({
   projectId: String,
   title: String,
   description: String,
-  status: { type: String, enum: ['TO_DO', 'IN_PROGRESS', 'COMPLETED'], default: 'TO_DO' },
+  status: { type: String, enum: ['TO_DO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED'], default: 'TO_DO' },
   priority: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH'], default: 'MEDIUM' },
   assignedTo: String,
+  assignees: { type: [String], default: [] },
+  followers: { type: [String], default: [] },
   dueDate: String,
   progress: { type: Number, default: 0 },
   checklist: [{ id: String, text: String, isCompleted: Boolean }],
   comments: [{ id: String, userId: String, userName: String, role: String, text: String, createdAt: String }],
   files: [String],
-  approvalStatus: { type: String, enum: ['PENDING', 'APPROVED', 'CHANGES_REQUESTED'] }
+  approvalStatus: { type: String, enum: ['PENDING', 'APPROVED', 'CHANGES_REQUESTED'] },
+  trackTime: { type: Boolean, default: true },
+  totalTimeLogged: { type: Number, default: 0 },
+  customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
 });
 
 const invoiceSchema = new mongoose.Schema({
@@ -114,6 +131,91 @@ const docSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+const leadSchema = new mongoose.Schema({
+  id: { type: String, unique: true },
+  name: String,
+  email: String,
+  phone: String,
+  company: String,
+  status: { type: String, enum: ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'CONVERTED', 'LOST'], default: 'NEW' },
+  source: String,
+  notes: String,
+  assignedTo: String,
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+  customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
+});
+
+const expenseSchema = new mongoose.Schema({
+  id: { type: String, unique: true },
+  projectId: String,
+  clientId: String,
+  title: String,
+  amount: Number,
+  category: String,
+  date: { type: Date, default: Date.now },
+  billed: { type: Boolean, default: false },
+  status: { type: String, enum: ['PENDING', 'REIMBURSED', 'BILLABLE'], default: 'PENDING' },
+  receipt: String
+});
+
+const estimateSchema = new mongoose.Schema({
+  id: { type: String, unique: true },
+  clientId: String,
+  projectId: String,
+  items: [{
+    description: String,
+    quantity: Number,
+    unitPrice: Number,
+    amount: Number,
+    cost: Number
+  }],
+  tax: Number,
+  total: Number,
+  status: { type: String, enum: ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'INVOICED'], default: 'DRAFT' },
+  date: { type: Date, default: Date.now },
+  expiryDate: Date
+});
+
+const ticketSchema = new mongoose.Schema({
+  id: { type: String, unique: true },
+  clientId: String,
+  projectId: String,
+  subject: String,
+  description: String,
+  status: { type: String, enum: ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'], default: 'OPEN' },
+  priority: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'], default: 'MEDIUM' },
+  assignedTo: String,
+  assignedTo: String,
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+  customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
+});
+
+const announcementSchema = new mongoose.Schema({
+  id: { type: String, unique: true },
+  title: String,
+  content: String,
+  target: { type: String, enum: ['ALL', 'STAFF', 'CLIENTS'], default: 'ALL' },
+  authorId: String,
+  createdAt: { type: Date, default: Date.now }
+});
+
+const cmsPageSchema = new mongoose.Schema({
+  id: { type: String, unique: true, required: true },
+  slug: { type: String, unique: true, required: true },
+  title: String,
+  status: { type: String, enum: ['DRAFT', 'PUBLISHED'], default: 'DRAFT' },
+  sections: [{
+    id: String,
+    type: { type: String, enum: ['HERO', 'NARRATIVE', 'PRICING', 'FAQ', 'TESTIMONIALS', 'FEATURES'] },
+    content: mongoose.Schema.Types.Mixed,
+    order: Number
+  }],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
 const User = mongoose.model('User', userSchema);
 const Client = mongoose.model('Client', clientSchema);
 const Project = mongoose.model('Project', projectSchema);
@@ -121,6 +223,40 @@ const Task = mongoose.model('Task', taskSchema);
 const Invoice = mongoose.model('Invoice', invoiceSchema);
 const Verification = mongoose.model('Verification', verificationSchema);
 const Doc = mongoose.model('Doc', docSchema);
+const Lead = mongoose.model('Lead', leadSchema);
+const Expense = mongoose.model('Expense', expenseSchema);
+const Estimate = mongoose.model('Estimate', estimateSchema);
+const Ticket = mongoose.model('Ticket', ticketSchema);
+const Announcement = mongoose.model('Announcement', announcementSchema);
+const Page = mongoose.model('Page', cmsPageSchema);
+
+const TimeEntry = mongoose.model('TimeEntry', new mongoose.Schema({
+  id: { type: String, unique: true },
+  userId: String,
+  taskId: String,
+  startTime: Date,
+  endTime: Date,
+  duration: { type: Number, default: 0 },
+  isBillable: { type: Boolean, default: true },
+  billed: { type: Boolean, default: false }
+}));
+
+const settingsSchema = new mongoose.Schema({
+  id: { type: String, default: 'current_settings', unique: true },
+  logoUrl: String,
+  primaryColor: { type: String, default: 'indigo-600' },
+  companyName: { type: String, default: 'Avocado Inc' },
+  supportEmail: String,
+  customFieldDefinitions: [{
+    id: String,
+    resource: { type: String, enum: ['TASK', 'PROJECT', 'LEAD', 'USER', 'CLIENT'] },
+    name: String,
+    type: { type: String, enum: ['TEXT', 'NUMBER', 'DATE', 'SELECT'] },
+    options: [String],
+    required: { type: Boolean, default: false }
+  }]
+});
+const Settings = mongoose.model('Settings', settingsSchema);
 
 const Conversation = mongoose.model('Conversation', new mongoose.Schema({
   id: { type: String, unique: true },
@@ -162,7 +298,15 @@ const getModel = (resource) => {
     conversations: Conversation,
     messages: Message,
     activities: Activity,
-    docs: Doc
+    docs: Doc,
+    leads: Lead,
+    expenses: Expense,
+    estimates: Estimate,
+    tickets: Ticket,
+    announcements: Announcement,
+    settings: Settings,
+    timeEntry: TimeEntry,
+    pages: Page
   };
   return models[resource];
 };
@@ -575,8 +719,7 @@ app.put('/api/:resource/:id', async (req, res) => {
   }
 
   try {
-    const updated = await Model.findOneAndUpdate({ id }, payload, { new: true });
-    if (!updated) return res.status(404).json({ error: 'Not found' });
+    const updated = await Model.findOneAndUpdate({ id }, payload, { new: true, upsert: true });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });

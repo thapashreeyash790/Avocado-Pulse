@@ -3,9 +3,13 @@ import { useApp } from '../store/AppContext';
 import { UserRole } from '../types';
 import { ICONS } from '../constants';
 
-const LoginView: React.FC = () => {
+interface LoginViewProps {
+  initialIsLogin?: boolean;
+}
+
+const LoginView: React.FC<LoginViewProps> = ({ initialIsLogin = true }) => {
   const { login, signup, verifyOTP, cancelSignup, resendOTP, error, isLoading, invitedEmail, invitedRole, inviteToken } = useApp();
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(initialIsLogin);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');

@@ -28,9 +28,10 @@ const KanbanBoard: React.FC = () => {
   }, [user, clients]);
 
   const columns = [
-    { id: TaskStatus.TODO, label: STATUS_LABELS.TO_DO, color: 'border-slate-300 bg-slate-50/50' },
-    { id: TaskStatus.IN_PROGRESS, label: STATUS_LABELS.IN_PROGRESS, color: 'border-indigo-200 bg-indigo-50/30' },
-    { id: TaskStatus.COMPLETED, label: STATUS_LABELS.COMPLETED, color: 'border-green-200 bg-green-50/30' },
+    { id: TaskStatus.TODO, label: STATUS_LABELS.TO_DO, color: 'border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30' },
+    { id: TaskStatus.IN_PROGRESS, label: STATUS_LABELS.IN_PROGRESS, color: 'border-blue-200 dark:border-blue-900/50 bg-blue-50/30 dark:bg-blue-900/10' },
+    { id: TaskStatus.REVIEW, label: 'Under Review', color: 'border-amber-200 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-900/10' },
+    { id: TaskStatus.COMPLETED, label: STATUS_LABELS.COMPLETED, color: 'border-green-200 dark:border-green-900/50 bg-green-50/30 dark:bg-green-900/10' },
   ];
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
@@ -66,7 +67,7 @@ const KanbanBoard: React.FC = () => {
     <div className="h-full flex flex-col p-4 md:p-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">{headerTitle}</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{headerTitle}</h2>
           <div className="flex items-center gap-4 mt-2">
             <div className="relative group">
               <ICONS.Trello className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
@@ -109,9 +110,10 @@ const KanbanBoard: React.FC = () => {
             <div className="flex items-center justify-between mb-4 px-2">
               <div className="flex items-center gap-2">
                 <span className={`w-2.5 h-2.5 rounded-full ${column.id === TaskStatus.TODO ? 'bg-slate-400' :
-                  column.id === TaskStatus.IN_PROGRESS ? 'bg-green-500' : 'bg-green-600'
+                  column.id === TaskStatus.IN_PROGRESS ? 'bg-blue-500' :
+                    column.id === TaskStatus.REVIEW ? 'bg-amber-500' : 'bg-green-600'
                   }`}></span>
-                <h3 className="font-bold text-slate-800 uppercase text-xs tracking-widest">{column.label}</h3>
+                <h3 className="font-bold text-slate-800 dark:text-slate-200 uppercase text-xs tracking-widest">{column.label}</h3>
                 <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px] font-bold text-slate-500">
                   {filteredTasks.filter(t => t.status === column.id).length}
                 </span>

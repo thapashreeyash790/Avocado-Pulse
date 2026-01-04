@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
-import { Task, UserRole, TaskStatus, ApprovalStatus, TaskPriority } from '../types';
+import { Task, UserRole, TaskStatus, ApprovalStatus, TaskPriority, CustomFieldDefinition } from '../types';
 import { ICONS, PRIORITY_COLORS } from '../constants';
 import { generateTaskChecklist } from '../services/gemini';
 
@@ -11,26 +11,33 @@ interface TaskModalProps {
 }
 
 const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
-  const { tasks, user, addComment, approveTask, requestChanges, updateTaskStatus, deleteTask, copyTask, setTasks, toggleBookmark } = useApp();
-  const task = tasks.find(t => t.id === taskId);
+  const {
+    tasks, user, addComment, approveTask, requestChanges, updateTaskStatus, deleteTask, copyTask,
+    updateTask, toggleBookmark, logTime, updateTaskAssignees, toggleTaskFollower, allUsers, settings,
+    activeTimer, startTimer, stopTimer
+  } = useApp();
 
-  // Only allow client to edit/delete their own tasks
+  const task = tasks.find(t => t.id === taskId);
+  const fieldDefs = settings?.customFieldDefinitions.filter(d => d.resource === 'TASK') || [];
+
   const isClientOwner = user?.role === UserRole.CLIENT && user?.name === task?.assignedTo;
   const canEdit = user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN || isClientOwner;
 
   const [commentText, setCommentText] = useState('');
   const [isGeneratingChecklist, setIsGeneratingChecklist] = useState(false);
-
-  // Title editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task?.title || '');
-
-  // Description editing state
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedDescription, setEditedDescription] = useState(task?.description || '');
 
   const [showActionsMenu, setShowActionsMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [showTimeLogModal, setShowTimeLogModal] = useState(false);
+  const [manualMinutes, setManualMinutes] = useState('');
+
+  // Timer State (Global)
+  const isTimerRunning = activeTimer?.taskId === taskId;
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (task) {
@@ -40,35 +47,50 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
   }, [task?.id]);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setShowActionsMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    if (isTimerRunning && activeTimer) {
+      const update = () => setElapsed(Math.floor((Date.now() - activeTimer.startTime) / 1000));
+      update();
+      timerRef.current = setInterval(update, 1000);
+    } else {
+      setElapsed(0);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isTimerRunning, activeTimer]);
 
-  if (!task) return null;
+  const formatElapsed = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h > 0 ? h + ':' : ''}${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
 
-  const handleStatusChange = (status: TaskStatus) => {
-    if (!canEdit) return;
-    updateTaskStatus(taskId, status);
+  const handleToggleTimer = async () => {
+    if (isTimerRunning) {
+      await stopTimer();
+    } else {
+      if (task) startTimer(taskId, task.title);
+    }
+  };
+
+  const handleManualLog = async () => {
+    const mins = parseInt(manualMinutes);
+    if (!isNaN(mins) && mins > 0) {
+      await logTime(taskId, mins);
+      setManualMinutes('');
+      setShowTimeLogModal(false);
+    }
   };
 
   const handleSaveTitle = () => {
     if (!editedTitle.trim() || !canEdit) return;
-    setTasks(prev => prev.map(t =>
-      t.id === taskId ? { ...t, title: editedTitle.trim() } : t
-    ));
+    updateTask(taskId, { title: editedTitle.trim() });
     setIsEditingTitle(false);
   };
 
   const handleSaveDescription = () => {
     if (!canEdit) return;
-    setTasks(prev => prev.map(t =>
-      t.id === taskId ? { ...t, description: editedDescription } : t
-    ));
+    updateTask(taskId, { description: editedDescription });
     setIsEditingDescription(false);
   };
 
@@ -90,32 +112,26 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
     if (!canEdit) return;
     copyTask(taskId);
     setShowActionsMenu(false);
-    alert("Task duplicated successfully!");
   };
 
   const handleShare = () => {
-    const url = `${window.location.origin}${window.location.pathname}#/board?task=${taskId}`;
+    const url = `${window.location.origin}${window.location.pathname}#/boards?task=${taskId}`;
     navigator.clipboard.writeText(url);
-    alert("Share link copied to clipboard!");
     setShowActionsMenu(false);
   };
 
   const handleToggleChecklist = (itemId: string) => {
-    if (!canEdit) return;
-    setTasks(prev => prev.map(t => {
-      if (t.id === taskId) {
-        const newChecklist = t.checklist.map(item =>
-          item.id === itemId ? { ...item, isCompleted: !item.isCompleted } : item
-        );
-        const completedCount = newChecklist.filter(i => i.isCompleted).length;
-        const progress = Math.round((completedCount / (newChecklist.length || 1)) * 100);
-        return { ...t, checklist: newChecklist, progress };
-      }
-      return t;
-    }));
+    if (!canEdit || !task) return;
+    const newChecklist = task.checklist.map(item =>
+      item.id === itemId ? { ...item, isCompleted: !item.isCompleted } : item
+    );
+    const completedCount = newChecklist.filter(i => i.isCompleted).length;
+    const progress = Math.round((completedCount / (newChecklist.length || 1)) * 100);
+    updateTask(taskId, { checklist: newChecklist, progress });
   };
 
   const handleAiChecklist = async () => {
+    if (!task) return;
     setIsGeneratingChecklist(true);
     const suggestions = await generateTaskChecklist(task.title, task.description);
     const newItems = suggestions.map((s: any) => ({
@@ -123,318 +139,262 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
       text: s.text,
       isCompleted: false
     }));
-
-    setTasks(prev => prev.map(t =>
-      t.id === taskId ? { ...t, checklist: [...t.checklist, ...newItems] } : t
-    ));
+    updateTask(taskId, { checklist: [...task.checklist, ...newItems] });
     setIsGeneratingChecklist(false);
   };
 
+  const handleFieldChange = (fieldId: string, value: any) => {
+    if (!task) return;
+    const nextCustomFields = { ...(task.customFields || {}), [fieldId]: value };
+    updateTask(taskId, { customFields: nextCustomFields });
+  };
+
+  if (!task) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-      <div className="relative bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-          <div className="flex items-center gap-4 flex-1">
-            <div className="p-2 bg-white rounded-xl shadow-sm border border-gray-100">
-              <ICONS.Trello className="w-5 h-5 text-indigo-600" />
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose}></div>
+      <div className="relative bg-[#FDFDFD] dark:bg-slate-900 w-full max-w-6xl max-h-[90vh] rounded-[2rem] shadow-2xl flex overflow-hidden animate-in zoom-in-95 duration-300 border border-white/50 dark:border-slate-700">
+
+        {/* Main Content Area (Left) */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-white/50 dark:bg-slate-900/50">
+          {/* Header */}
+          <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 flex items-start gap-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm sticky top-0 z-20">
+            <div className={`p-3 rounded-xl shadow-sm border border-indigo-100 bg-indigo-50 flex-shrink-0 mt-1`}>
+              <ICONS.Trello className="w-6 h-6 text-indigo-600" />
             </div>
-            <div className="flex flex-col flex-1">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">TASK DETAILS</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">TASK-{task.id.slice(-4)}</span>
+                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border uppercase tracking-wider ${PRIORITY_COLORS[task.priority]}`}>
+                  {task.priority} Priority
+                </span>
+              </div>
               {isEditingTitle ? (
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2">
                   <input
                     autoFocus
-                    className="text-xl font-bold text-gray-900 leading-tight bg-white border-b-2 border-indigo-600 outline-none w-full"
+                    className="text-2xl font-black text-slate-900 dark:text-white leading-tight bg-transparent border-b-2 border-indigo-500 outline-none w-full placeholder-slate-300"
                     value={editedTitle}
                     onChange={(e) => setEditedTitle(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
                   />
-                  <button onClick={handleSaveTitle} className="text-green-600 p-1 hover:bg-green-50 rounded"><ICONS.Check className="w-4 h-4" /></button>
+                  <button onClick={handleSaveTitle} className="text-emerald-600 p-2 hover:bg-emerald-50 rounded-xl"><ICONS.Check className="w-5 h-5" /></button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 group">
-                  <h3 className="text-xl font-bold text-gray-900 leading-tight">{task.title}</h3>
-                  {(user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN || isClientOwner) && (
-                    <button
-                      onClick={() => setIsEditingTitle(true)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-indigo-600 transition-all"
-                    >
-                      <ICONS.Check className="w-4 h-4" />
-                    </button>
-                  )}
+                <div className="group flex items-start gap-2">
+                  <h2 className="text-2xl font-black text-slate-900 dark:text-white leading-tight">{task.title}</h2>
+                  {canEdit && <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-indigo-600 transition-all"><ICONS.Edit3 className="w-4 h-4" /></button>}
                 </div>
               )}
             </div>
             <div className="flex items-center gap-2">
-              {user && (
-                <button
-                  onClick={() => toggleBookmark(taskId)}
-                  className={`p-2 rounded-xl border transition-all ${user.bookmarks?.includes(taskId) ? 'bg-amber-50 border-amber-200 text-amber-500 shadow-inner' : 'bg-white border-gray-100 text-gray-400 hover:text-amber-500'}`}
-                  title={user.bookmarks?.includes(taskId) ? "Remove Bookmark" : "Bookmark Task"}
-                >
-                  <ICONS.Bookmark className={`w-5 h-5 ${user.bookmarks?.includes(taskId) ? 'fill-current' : ''}`} />
-                </button>
+              <button onClick={() => toggleBookmark(taskId)} className={`p-2.5 rounded-xl transition-all ${user?.bookmarks?.includes(taskId) ? 'bg-amber-100 text-amber-600' : 'text-slate-400 hover:bg-slate-100'}`}>
+                <ICONS.Bookmark className={`w-5 h-5 ${user?.bookmarks?.includes(taskId) ? 'fill-current' : ''}`} />
+              </button>
+              <button onClick={onClose} className="p-2.5 rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">
+                <ICONS.X className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable Body */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-10">
+
+            {/* Description */}
+            <section className="group">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <ICONS.FileText className="w-3.5 h-3.5" /> Description
+                </h3>
+                {canEdit && !isEditingDescription && <button onClick={() => setIsEditingDescription(true)} className="text-[10px] font-bold text-indigo-600 hover:underline uppercase tracking-wide opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>}
+              </div>
+              {isEditingDescription ? (
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                  <textarea
+                    className="w-full p-5 bg-white dark:bg-slate-800 border-2 border-indigo-100 dark:border-slate-700 rounded-2xl text-sm font-medium text-slate-700 dark:text-slate-200 min-h-[150px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50/50 transition-all shadow-sm"
+                    value={editedDescription}
+                    onChange={(e) => setEditedDescription(e.target.value)}
+                    placeholder="Add a more detailed description..."
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setIsEditingDescription(false)} className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
+                    <button onClick={handleSaveDescription} className="px-4 py-2 text-xs font-black text-white bg-indigo-600 rounded-lg shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">Save Changes</button>
+                  </div>
+                </div>
+              ) : (
+                <div className={`prose prose-sm max-w-none text-slate-600 dark:text-slate-300 leading-relaxed ${!task.description ? 'italic text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl text-center border-2 border-dashed border-slate-100 dark:border-slate-700' : 'bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm'}`}>
+                  {task.description || "No description provided for this task."}
+                </div>
               )}
-              <div className="relative" ref={menuRef}>
-                <button
-                  onClick={() => setShowActionsMenu(!showActionsMenu)}
-                  className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-                >
-                  <ICONS.MoreVertical className="w-5 h-5 text-gray-500" />
+            </section>
+
+            {/* Checklist */}
+            <section>
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <ICONS.ListTodo className="w-3.5 h-3.5" /> Checklist
+                  <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[9px] font-bold">{Math.round(task.progress || 0)}% Done</span>
+                </h3>
+                {canEdit && <button onClick={handleAiChecklist} disabled={isGeneratingChecklist} className="text-[10px] font-black text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-all disabled:opacity-50">{isGeneratingChecklist ? 'Generating...' : 'Auto-Generate'}</button>}
+              </div>
+              <div className="space-y-2">
+                {task.checklist.map(item => (
+                  <div key={item.id} onClick={() => handleToggleChecklist(item.id)} className={`group flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${item.isCompleted ? 'bg-slate-50 dark:bg-slate-800/50 border-transparent opacity-60' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-800 hover:shadow-sm'}`}>
+                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${item.isCompleted ? 'bg-emerald-500 border-emerald-500' : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 group-hover:border-indigo-400'}`}>
+                      {item.isCompleted && <ICONS.Check className="w-3.5 h-3.5 text-white" />}
+                    </div>
+                    <span className={`text-sm font-medium ${item.isCompleted ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-200'}`}>{item.text}</span>
+                  </div>
+                ))}
+                {task.checklist.length === 0 && (
+                  <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border-2 border-dashed border-slate-100 dark:border-slate-700 text-slate-400 text-xs font-medium">No checklist items yet.</div>
+                )}
+              </div>
+            </section>
+
+            {/* Comments */}
+            <section>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                <ICONS.MessageSquare className="w-3.5 h-3.5" /> Discussion
+              </h3>
+              <div className="space-y-6">
+                {task.comments.map(c => (
+                  <div key={c.id} className="flex gap-4 group">
+                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${c.userId}`} className="w-8 h-8 rounded-full bg-slate-100 border border-white shadow-sm" alt="" />
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">{c.userName}</span>
+                        <span className="text-[9px] font-bold text-slate-300 uppercase">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <div className="p-3 bg-white dark:bg-slate-800 rounded-r-2xl rounded-bl-2xl border border-slate-100 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 shadow-sm group-hover:shadow-md transition-all">
+                        {c.text}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex gap-3 pt-2">
+                  <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-black text-xs">{user?.name[0]}</div>
+                  <div className="flex-1 relative">
+                    <textarea
+                      value={commentText}
+                      onChange={e => setCommentText(e.target.value)}
+                      placeholder="Type a message..."
+                      className="w-full text-sm font-medium p-4 pr-12 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50/20 transition-all min-h-[60px] resize-none text-slate-900 dark:text-white placeholder-slate-400"
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
+                    />
+                    <button onClick={handleAddComment} className="absolute right-2 bottom-2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200">
+                      <ICONS.ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        {/* Sidebar (Right) */}
+        <div className="w-[350px] bg-slate-50 dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800 p-6 flex flex-col gap-8 overflow-y-auto custom-scrollbar">
+
+          {/* Status Card */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</label>
+            <select
+              value={task.status}
+              onChange={(e) => updateTaskStatus(taskId, e.target.value as TaskStatus)}
+              className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 block appearance-none cursor-pointer"
+            >
+              {Object.values(TaskStatus).map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+            </select>
+          </div>
+
+          {/* Timer Card */}
+          <div className={`p-1 rounded-2xl border transition-all ${isTimerRunning ? 'bg-indigo-600 border-indigo-600 shadow-xl shadow-indigo-200' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm'}`}>
+            <div className="p-5 flex flex-col items-center text-center space-y-3">
+              <div className={`text-3xl font-black font-mono tracking-tighter ${isTimerRunning ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
+                {isTimerRunning ? formatElapsed(elapsed) : '0:00:00'}
+              </div>
+              <button
+                onClick={handleToggleTimer}
+                className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${isTimerRunning ? 'bg-white text-indigo-600 hover:bg-indigo-50' : 'bg-slate-900 dark:bg-slate-950 text-white hover:bg-black dark:hover:bg-slate-900'}`}
+              >
+                {isTimerRunning ? <><div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> Stop Timer</> : <><ICONS.Clock className="w-3.5 h-3.5" /> Start Timer</>}
+              </button>
+            </div>
+            {!isTimerRunning && (
+              <div className="bg-slate-50 dark:bg-slate-700/50 border-t border-slate-100 dark:border-slate-600 p-3 rounded-b-xl flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Add mins"
+                  className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-white"
+                  value={manualMinutes}
+                  onChange={e => setManualMinutes(e.target.value)}
+                />
+                <button onClick={handleManualLog} className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200"><ICONS.Check className="w-4 h-4" /></button>
+              </div>
+            )}
+          </div>
+
+          {/* People & Meta */}
+          <div className="space-y-6">
+
+            {/* Assignees */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assignees</label>
+                <button className="text-[10px] font-bold text-indigo-600 hover:underline">Manage</button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {task.assignees?.map(aid => (
+                  <div key={aid} className="flex items-center gap-2 bg-white dark:bg-slate-800 pl-1 pr-3 py-1 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${aid}`} className="w-6 h-6 rounded-full bg-slate-100" alt="" />
+                    <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-[80px]">User {aid.slice(0, 3)}</span>
+                  </div>
+                ))}
+                <button className="w-8 h-8 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-all">
+                  <ICONS.Plus className="w-4 h-4" />
                 </button>
-
-                {showActionsMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-[60] py-2 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                    <button onClick={handleShare} className="w-full px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-3">
-                      <ICONS.Plus className="w-4 h-4 rotate-45" /> Share Link
-                    </button>
-                    <button onClick={handleCopy} className="w-full px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-3">
-                      <ICONS.Plus className="w-4 h-4" /> Duplicate Task
-                    </button>
-                    {(user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN || isClientOwner) && (
-                      <button onClick={handleDelete} className="w-full px-4 py-2.5 text-left text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-3 border-t border-gray-50 mt-1">
-                        <ICONS.AlertCircle className="w-4 h-4" /> Delete Task
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
-          </div>
 
-          {/* Content Scroll Area */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-              {/* Main Info */}
-              <div className="lg:col-span-8 space-y-8">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                      Description
-                    </h4>
-                    {(user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN || isClientOwner) && !isEditingDescription && (
-                      <button
-                        onClick={() => setIsEditingDescription(true)}
-                        className="text-[10px] font-bold text-indigo-600 hover:underline uppercase tracking-widest"
+            {/* Custom Fields */}
+            {fieldDefs.length > 0 && (
+              <div className="space-y-4 pt-6 border-t border-slate-200">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Details</label>
+                {fieldDefs.map(def => (
+                  <div key={def.id}>
+                    <p className="text-[9px] font-bold text-slate-500 uppercase mb-1">{def.name}</p>
+                    {def.type === 'SELECT' ? (
+                      <select
+                        className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none focus:border-indigo-500"
+                        value={task.customFields?.[def.id] || ''}
+                        onChange={(e) => handleFieldChange(def.id, e.target.value)}
                       >
-                        Edit
-                      </button>
-                    )}
-                  </div>
-
-                  {isEditingDescription ? (
-                    <div className="space-y-3">
-                      <textarea
-                        className="w-full p-4 bg-white border border-slate-200 rounded-xl text-sm text-black font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none min-h-[120px]"
-                        value={editedDescription}
-                        onChange={(e) => setEditedDescription(e.target.value)}
-                      />
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => setIsEditingDescription(false)}
-                          className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleSaveDescription}
-                          className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-gray-600 leading-relaxed whitespace-pre-wrap">
-                      {task.description || "No description provided."}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                      Checklist
-                      <span className="bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded text-[10px]">{task.checklist.filter(i => i.isCompleted).length}/{task.checklist.length}</span>
-                    </h4>
-                    {(user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN || isClientOwner) && (
-                      <button
-                        onClick={handleAiChecklist}
-                        disabled={isGeneratingChecklist}
-                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 transition-all border border-indigo-100"
-                      >
-                        <ICONS.TrendingUp className={`w-3.5 h-3.5 ${isGeneratingChecklist ? 'animate-bounce' : ''}`} />
-                        {isGeneratingChecklist ? 'Thinking...' : 'AI Suggestion'}
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    {task.checklist.map(item => (
-                      <div
-                        key={item.id}
-                        onClick={() => handleToggleChecklist(item.id)}
-                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group ${item.isCompleted ? 'bg-gray-50 border-gray-100 text-gray-400' : 'bg-white border-gray-200 text-gray-700 hover:border-indigo-300'
-                          }`}
-                      >
-                        <div className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${item.isCompleted ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'
-                          }`}>
-                          {item.isCompleted && <ICONS.Check className="w-3.5 h-3.5 text-white" />}
-                        </div>
-                        <span className={`text-sm ${item.isCompleted ? 'line-through' : 'font-medium'}`}>{item.text}</span>
-                      </div>
-                    ))}
-                    {task.checklist.length === 0 && (
-                      <p className="text-xs text-gray-400 italic py-4">No checklist items defined yet.</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4">Activity & Comments</h4>
-                  <div className="space-y-6">
-                    {task.comments.map(comment => (
-                      <div key={comment.id} className="flex gap-4">
-                        <img src={`https://picsum.photos/32/32?random=${comment.userId}`} className="w-8 h-8 rounded-full flex-shrink-0" alt="" />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-bold text-gray-900">{comment.userName}</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider ${comment.role === UserRole.CLIENT ? 'bg-orange-100 text-orange-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                              {comment.role}
-                            </span>
-                            <span className="text-[10px] text-gray-400 font-semibold">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                          <div className="text-sm text-black bg-white p-3 rounded-xl border border-gray-100 shadow-sm font-medium">
-                            {comment.text}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-
-                    <div className="flex gap-4 pt-2">
-                      <img src="https://picsum.photos/32/32?random=current" className="w-8 h-8 rounded-full flex-shrink-0" alt="" />
-                      <div className="flex-1 flex flex-col gap-2">
-                        <textarea
-                          value={commentText}
-                          onChange={(e) => setCommentText(e.target.value)}
-                          placeholder="Write a comment..."
-                          className="w-full text-sm p-3 border border-gray-200 rounded-xl text-black font-semibold bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all min-h-[80px]"
-                        />
-                        <div className="flex justify-end">
-                          <button
-                            onClick={handleAddComment}
-                            className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider shadow-sm"
-                          >
-                            Post Comment
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sidebar Controls */}
-              <div className="lg:col-span-4 space-y-6">
-                <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 space-y-6">
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-3">Status</label>
-                    <select
-                      value={task.status}
-                      onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
-                      disabled={user?.role === UserRole.CLIENT}
-                      className={`w-full p-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500 ${user?.role === UserRole.CLIENT ? 'cursor-not-allowed text-gray-400' : 'cursor-pointer text-gray-800'}`}
-                    >
-                      <option value={TaskStatus.TODO}>To Do</option>
-                      <option value={TaskStatus.IN_PROGRESS}>In Progress</option>
-                      <option value={TaskStatus.COMPLETED}>Completed</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-3">Priority</label>
-                    <select
-                      value={task.priority}
-                      onChange={(e) => {
-                        if (user?.role === UserRole.CLIENT) return;
-                        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, priority: e.target.value as TaskPriority } : t));
-                      }}
-                      disabled={user?.role === UserRole.CLIENT}
-                      className={`w-full p-2.5 border rounded-xl text-sm font-bold text-center uppercase tracking-wider outline-none focus:ring-2 focus:ring-indigo-500 ${PRIORITY_COLORS[task.priority]} ${user?.role === UserRole.CLIENT ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
-                    >
-                      <option value={TaskPriority.LOW}>Low</option>
-                      <option value={TaskPriority.MEDIUM}>Medium</option>
-                      <option value={TaskPriority.HIGH}>High</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-3">Due Date</label>
-                    <div className="relative">
-                      <ICONS.Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input
-                        type="date"
-                        value={task.dueDate}
-                        disabled={user?.role === UserRole.CLIENT}
-                        onChange={(e) => {
-                          setTasks(prev => prev.map(t => t.id === taskId ? { ...t, dueDate: e.target.value } : t));
-                        }}
-                        className={`w-full pl-10 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 font-medium outline-none focus:ring-2 focus:ring-indigo-500 ${user?.role === UserRole.CLIENT ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-3">Assignee</label>
-                    <div className="flex items-center gap-3 p-2.5 bg-white border border-gray-200 rounded-xl">
-                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${task.assignedTo}`} className="w-6 h-6 rounded-full" alt="" />
-                      <span className="text-sm font-semibold text-gray-800">{task.assignedTo}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Approval Section */}
-                {task.status === TaskStatus.COMPLETED && (
-                  <div className={`p-6 rounded-2xl border-2 shadow-xl animate-in fade-in slide-in-from-top-4 duration-300 ${task.approvalStatus === ApprovalStatus.APPROVED ? 'bg-green-50 border-green-200' :
-                    task.approvalStatus === ApprovalStatus.CHANGES_REQUESTED ? 'bg-red-50 border-red-200' :
-                      'bg-indigo-50 border-indigo-200'
-                    }`}>
-                    <h5 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                      <ICONS.CheckCircle2 className={`w-5 h-5 ${task.approvalStatus === ApprovalStatus.APPROVED ? 'text-green-600' :
-                        task.approvalStatus === ApprovalStatus.CHANGES_REQUESTED ? 'text-red-600' : 'text-indigo-600'
-                        }`} />
-                      {task.approvalStatus === ApprovalStatus.APPROVED ? 'Client Approved' :
-                        task.approvalStatus === ApprovalStatus.CHANGES_REQUESTED ? 'Changes Requested' : 'Pending Approval'}
-                    </h5>
-
-                    {user?.role === UserRole.CLIENT && task.approvalStatus === ApprovalStatus.PENDING ? (
-                      <div className="space-y-3 mt-4">
-                        <button
-                          onClick={() => approveTask(taskId)}
-                          className="w-full py-3 bg-green-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-green-100 hover:bg-green-700 transition-all"
-                        >
-                          Approve Task
-                        </button>
-                        <button
-                          onClick={() => requestChanges(taskId)}
-                          className="w-full py-3 bg-white border border-red-200 text-red-600 rounded-xl font-bold text-sm hover:bg-red-50 transition-all"
-                        >
-                          Request Changes
-                        </button>
-                      </div>
+                        <option value="">Select...</option>
+                        {def.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
                     ) : (
-                      <p className="text-xs text-gray-500 leading-relaxed mt-2">
-                        {task.approvalStatus === ApprovalStatus.APPROVED ? 'This task has been finalized and locked.' :
-                          task.approvalStatus === ApprovalStatus.CHANGES_REQUESTED ? 'The team is currently reviewing requested changes.' :
-                            'Waiting for client review and final approval.'}
-                      </p>
+                      <input
+                        type={def.type === 'NUMBER' ? 'number' : def.type === 'DATE' ? 'date' : 'text'}
+                        className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none focus:border-indigo-500"
+                        value={task.customFields?.[def.id] || ''}
+                        onChange={(e) => handleFieldChange(def.id, e.target.value)}
+                      />
                     )}
                   </div>
-                )}
+                ))}
               </div>
-            </div>
+            )}
           </div>
+
+          {/* Footer Action */}
+          <div className="mt-auto pt-6 border-t border-slate-200">
+            <button onClick={handleDelete} className="w-full py-3 border border-red-100 text-red-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-50 transition-all flex items-center justify-center gap-2">
+              <ICONS.Trash className="w-4 h-4" /> Delete Task
+            </button>
+          </div>
+
         </div>
       </div>
     </div>
