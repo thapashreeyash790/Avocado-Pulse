@@ -34,7 +34,9 @@ import {
   Trash,
   Sun,
   Moon,
-  Video
+  Video,
+  Menu,
+  Type
 } from 'lucide-react';
 
 export const ICONS = {
@@ -71,7 +73,9 @@ export const ICONS = {
   Trash,
   Sun,
   Moon,
-  Video
+  Video,
+  Menu,
+  Type
 };
 
 export const PRIORITY_COLORS = {
