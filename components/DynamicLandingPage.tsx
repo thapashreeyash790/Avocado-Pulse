@@ -3,14 +3,15 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../store/AppContext';
 import { CMSPage, CMSSection } from '../types';
+import { ICONS } from '../constants';
 import '../components/LandingPage.css';
 
 interface Props {
     isEditing?: boolean;
     pageData?: CMSPage;
     onUpdate?: (page: CMSPage) => void;
-    onSelectSection?: (id: string) => void;
-    activeSectionId?: string;
+    onSelectSection?: (id: string | null) => void;
+    activeSectionId?: string | null;
 }
 
 const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate, onSelectSection, activeSectionId }) => {
@@ -40,6 +41,40 @@ const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate, on
         const updatedPage = { ...page, sections: updatedSections };
         setPage(updatedPage);
         onUpdate(updatedPage);
+    };
+
+    const handleDuplicateSection = (e: React.MouseEvent, index: number) => {
+        e.stopPropagation();
+        if (!page || !onUpdate) return;
+        const newSections = [...page.sections];
+        const sectionToDuplicate = newSections[index];
+        const duplicatedSection = {
+            ...sectionToDuplicate,
+            id: Math.random().toString(36).substr(2, 9),
+            order: index + 1
+        };
+        newSections.splice(index + 1, 0, duplicatedSection);
+        const reordered = newSections.map((s, i) => ({ ...s, order: i + 1 }));
+        const updatedPage = { ...page, sections: reordered };
+        setPage(updatedPage);
+        onUpdate(updatedPage);
+    };
+
+    const handleDeleteSection = (e: React.MouseEvent, index: number) => {
+        e.stopPropagation();
+        if (!page || !onUpdate) return;
+        if (confirm('Are you sure you want to delete this section?')) {
+            const newSections = [...page.sections];
+            const deletedSectionId = newSections[index].id;
+            newSections.splice(index, 1);
+            const reordered = newSections.map((s, i) => ({ ...s, order: i + 1 }));
+            const updatedPage = { ...page, sections: reordered };
+            setPage(updatedPage);
+            onUpdate(updatedPage);
+            if (activeSectionId === deletedSectionId && onSelectSection) {
+                onSelectSection(null);
+            }
+        }
     };
 
     if (!page) {
@@ -77,10 +112,44 @@ const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate, on
                 </div>
             )}
 
-            {page.sections.sort((a, b) => a.order - b.order).map(section => (
+            {page.sections.sort((a, b) => a.order - b.order).map((section, index) => (
                 <div
                     key={section.id}
-                    className={`relative group transition-all ${isEditing ? 'cursor-pointer hover:ring-2 hover:ring-blue-400/50' : ''} ${activeSectionId === section.id ? 'ring-2 ring-blue-500 z-10' : ''}`}
+                    draggable={isEditing}
+                    onDragStart={(e) => {
+                        if (!isEditing) return;
+                        e.dataTransfer.setData('text/plain', index.toString());
+                        e.dataTransfer.effectAllowed = 'move';
+                        // Add a transparent styling or class if desired
+                        e.currentTarget.style.opacity = '0.5';
+                    }}
+                    onDragEnd={(e) => {
+                        if (!isEditing) return;
+                        e.currentTarget.style.opacity = '1';
+                    }}
+                    onDragOver={(e) => {
+                        if (!isEditing) return;
+                        e.preventDefault(); // Necessary to allow dropping
+                        e.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(e) => {
+                        if (!isEditing || !onUpdate) return;
+                        e.preventDefault();
+                        const sourceIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                        if (isNaN(sourceIndex) || sourceIndex === index) return;
+
+                        const newSections = Array.from(page.sections);
+                        const [movedSection] = newSections.splice(sourceIndex, 1);
+                        newSections.splice(index, 0, movedSection);
+
+                        // Re-assign order based on new index
+                        const reorderedSections = newSections.map((s: CMSSection, i: number) => ({ ...s, order: i + 1 }));
+
+                        const updatedPage = { ...page, sections: reorderedSections };
+                        setPage(updatedPage);
+                        onUpdate(updatedPage);
+                    }}
+                    className={`relative group transition-all ${isEditing ? 'cursor-move hover:ring-2 hover:ring-blue-400/50' : ''} ${activeSectionId === section.id ? 'ring-2 ring-blue-500 z-10' : ''}`}
                     onClick={(e) => {
                         if (isEditing && onSelectSection) {
                             e.stopPropagation();
@@ -98,8 +167,29 @@ const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate, on
                         onUpdate={(content) => handleSectionUpdate(section.id, content)}
                     />
                     {isEditing && (
-                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-lg rounded p-2 z-50 flex gap-2">
-                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{section.type}</span>
+                        <div className={`absolute top-0 left-1/2 -translate-x-1/2 -mt-5 transition-all z-50 flex gap-1 ${activeSectionId === section.id || 'group-hover:opacity-100 opacity-0'}`}>
+                            <div className="bg-blue-600 text-white text-xs rounded-t-lg shadow-lg font-bold flex items-center overflow-hidden">
+                                <div title="Drag to reorder" className="px-2 py-1.5 cursor-move hover:bg-blue-700 flex items-center border-r border-blue-500">
+                                    <span className="text-sm">⋮⋮</span>
+                                </div>
+                                <div className="px-2 py-1.5 font-medium uppercase tracking-wider text-[10px] select-none cursor-default border-r border-blue-500">
+                                    {section.type}
+                                </div>
+                                <button
+                                    onClick={(e) => handleDuplicateSection(e, index)}
+                                    title="Duplicate Section"
+                                    className="px-2 py-1.5 hover:bg-blue-700 transition-colors border-r border-blue-500"
+                                >
+                                    <ICONS.Plus size={12} />
+                                </button>
+                                <button
+                                    onClick={(e) => handleDeleteSection(e, index)}
+                                    title="Delete Section"
+                                    className="px-2 py-1.5 hover:bg-red-600 transition-colors"
+                                >
+                                    <ICONS.Trash size={12} />
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -170,10 +260,15 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
         if (onUpdate) onUpdate({ ...section.content, [field]: value });
     };
 
+    const sectionStyle = {
+        paddingTop: section.content.paddingTop ? `${section.content.paddingTop}px` : undefined,
+        paddingBottom: section.content.paddingBottom ? `${section.content.paddingBottom}px` : undefined,
+    };
+
     switch (section.type) {
         case 'HERO':
             return (
-                <section className="hero-section relative pt-40 pb-32 overflow-hidden">
+                <section className="hero-section relative pt-40 pb-32 overflow-hidden" style={sectionStyle}>
                     {/* Background Image Wrapper */}
                     <div className="absolute inset-0 z-0">
                         {section.content.backgroundImage && (
@@ -220,7 +315,7 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
             );
         case 'FEATURES':
             return (
-                <section className="features-section py-24 bg-white">
+                <section className="features-section py-24 bg-white" style={sectionStyle}>
                     <div className="max-w-7xl mx-auto px-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
                             {section.content.items?.map((item: any, idx: number) => (
@@ -267,7 +362,7 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
             )
         case 'PRICING':
             return (
-                <section className="pricing-section py-24 bg-gray-50">
+                <section className="pricing-section py-24 bg-gray-50" style={sectionStyle}>
                     <div className="max-w-7xl mx-auto px-6 text-center">
                         <h2 className="text-4xl font-bold mb-12">Simple, Transparent Pricing</h2>
                         <div className="flex flex-wrap justify-center gap-8">
@@ -321,7 +416,7 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
             );
         case 'NARRATIVE':
             return (
-                <section className="py-24 bg-white">
+                <section className="py-24 bg-white" style={sectionStyle}>
                     <div className="max-w-3xl mx-auto px-6">
                         <EditableText
                             tagName="h2"
@@ -342,7 +437,7 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
             );
         case 'FAQ':
             return (
-                <section className="py-24 bg-gray-50">
+                <section className="py-24 bg-gray-50" style={sectionStyle}>
                     <div className="max-w-4xl mx-auto px-6">
                         <h2 className="text-3xl font-bold mb-12 text-center">Frequently Asked Questions</h2>
                         <div className="space-y-6">
@@ -378,7 +473,7 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
             );
         case 'TESTIMONIALS':
             return (
-                <section className="py-24 bg-white overflow-hidden">
+                <section className="py-24 bg-white overflow-hidden" style={sectionStyle}>
                     <div className="max-w-7xl mx-auto px-6">
                         <h2 className="text-3xl font-bold mb-12 text-center">What People Say</h2>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

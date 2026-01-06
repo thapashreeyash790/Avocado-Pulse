@@ -197,62 +197,14 @@ const CMSDashboard: React.FC = () => {
                     </div>
 
                     {/* Properties Panel (Right Sidebar) */}
-                    {activeSection && (
-                        <div className="w-72 bg-white border-l h-full p-6 overflow-y-auto shrink-0 shadow-xl z-10 transition-all">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="font-bold text-sm uppercase text-gray-500 tracking-wider">Properties</h3>
-                                <button onClick={() => setActiveSectionId(null)} className="text-gray-400 hover:text-black">✕</button>
-                            </div>
-
-                            <div className="mb-6 pb-6 border-b">
-                                <span className="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded uppercase tracking-wider">{activeSection.type}</span>
-                                <div className="flex gap-2 mt-4">
-                                    <button onClick={() => moveSection(activeSection.id, 'up')} className="flex-1 py-1 text-xs border rounded hover:bg-gray-50">Move Up</button>
-                                    <button onClick={() => moveSection(activeSection.id, 'down')} className="flex-1 py-1 text-xs border rounded hover:bg-gray-50">Move Down</button>
-                                </div>
-                                <button onClick={() => removeSection(activeSection.id)} className="w-full mt-2 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50">Remove Section</button>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Background Color</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="color"
-                                            className="w-8 h-8 rounded cursor-pointer border-0 p-0"
-                                            value={activeSection.content.bgColor || '#ffffff'}
-                                            onChange={e => updateSection(activeSection.id, { bgColor: e.target.value })}
-                                        />
-                                        <input
-                                            type="text"
-                                            className="flex-1 p-1 border rounded text-sm font-mono"
-                                            value={activeSection.content.bgColor || ''}
-                                            onChange={e => updateSection(activeSection.id, { bgColor: e.target.value })}
-                                            placeholder="#ffffff"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Text Color</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="color"
-                                            className="w-8 h-8 rounded cursor-pointer border-0 p-0"
-                                            value={activeSection.content.textColor || '#000000'}
-                                            onChange={e => updateSection(activeSection.id, { textColor: e.target.value })}
-                                        />
-                                        <input
-                                            type="text"
-                                            className="flex-1 p-1 border rounded text-sm font-mono"
-                                            value={activeSection.content.textColor || ''}
-                                            onChange={e => updateSection(activeSection.id, { textColor: e.target.value })}
-                                            placeholder="#000000"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {/* Properties Panel (Right Sidebar) */}
+                    <PropertiesPanel
+                        activeSection={activeSection}
+                        setActiveSectionId={setActiveSectionId}
+                        moveSection={moveSection}
+                        removeSection={removeSection}
+                        updateSection={updateSection}
+                    />
                 </div>
             </div>
         );
@@ -281,6 +233,159 @@ const CMSDashboard: React.FC = () => {
                         </div>
                     </div>
                 ))}
+            </div>
+        </div>
+    );
+};
+
+const PropertiesPanel: React.FC<{
+    activeSection: CMSSection | undefined;
+    setActiveSectionId: (id: string | null) => void;
+    moveSection: (id: string, dir: 'up' | 'down') => void;
+    removeSection: (id: string) => void;
+    updateSection: (id: string, updates: any) => void;
+}> = ({ activeSection, setActiveSectionId, moveSection, removeSection, updateSection }) => {
+    const [activeTab, setActiveTab] = useState<'content' | 'style'>('content');
+
+    if (!activeSection) return null;
+
+    return (
+        <div className="w-72 bg-white border-l h-full flex flex-col shadow-xl z-20 shrink-0 ease-in-out duration-300">
+            {/* Header */}
+            <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                <div className="font-bold text-sm uppercase text-gray-700 tracking-wider">
+                    Edit {activeSection.type}
+                </div>
+                <button onClick={() => setActiveSectionId(null)} className="text-gray-400 hover:text-black">✕</button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b">
+                <button
+                    onClick={() => setActiveTab('content')}
+                    className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'content' ? 'border-b-2 border-blue-500 text-blue-600 bg-white' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'}`}
+                >
+                    Content
+                </button>
+                <button
+                    onClick={() => setActiveTab('style')}
+                    className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'style' ? 'border-b-2 border-blue-500 text-blue-600 bg-white' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'}`}
+                >
+                    Style
+                </button>
+            </div>
+
+            {/* Panel Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+                {activeTab === 'content' && (
+                    <div className="space-y-6">
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                            <p className="text-xs text-blue-700 mb-2">
+                                💡 <strong>Tip:</strong> Click directly on text or images in the preview to edit them.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">Section Actions</label>
+                            <div className="flex gap-2 mb-2">
+                                <button onClick={() => moveSection(activeSection.id, 'up')} className="flex-1 py-2 text-xs border rounded hover:bg-gray-50 flex items-center justify-center gap-1">
+                                    <span>↑</span> Move Up
+                                </button>
+                                <button onClick={() => moveSection(activeSection.id, 'down')} className="flex-1 py-2 text-xs border rounded hover:bg-gray-50 flex items-center justify-center gap-1">
+                                    <span>↓</span> Move Down
+                                </button>
+                            </div>
+                            <button onClick={() => removeSection(activeSection.id)} className="w-full py-2 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50 flex items-center justify-center gap-1">
+                                <span>🗑</span> Delete Section
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'style' && (
+                    <div className="space-y-6">
+                        {/* Typography */}
+                        <div>
+                            <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-3 pb-1 border-b">Typography</h4>
+                            <div className="mb-4">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Text Color</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="color"
+                                        className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                                        value={activeSection.content.textColor || '#000000'}
+                                        onChange={e => updateSection(activeSection.id, { textColor: e.target.value })}
+                                    />
+                                    <input
+                                        type="text"
+                                        className="flex-1 p-1 border rounded text-sm font-mono"
+                                        value={activeSection.content.textColor || ''}
+                                        onChange={e => updateSection(activeSection.id, { textColor: e.target.value })}
+                                        placeholder="#000000"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Background */}
+                        <div>
+                            <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-3 pb-1 border-b">Background</h4>
+                            <div className="mb-4">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Background Color</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="color"
+                                        className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                                        value={activeSection.content.bgColor || '#ffffff'}
+                                        onChange={e => updateSection(activeSection.id, { bgColor: e.target.value })}
+                                    />
+                                    <input
+                                        type="text"
+                                        className="flex-1 p-1 border rounded text-sm font-mono"
+                                        value={activeSection.content.bgColor || ''}
+                                        onChange={e => updateSection(activeSection.id, { bgColor: e.target.value })}
+                                        placeholder="#ffffff"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Spacing */}
+                        <div>
+                            <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-3 pb-1 border-b">Spacing</h4>
+                            <div className="mb-4">
+                                <div className="flex justify-between mb-1">
+                                    <label className="block text-xs font-bold text-gray-500">Padding Top</label>
+                                    <span className="text-xs text-gray-400">{activeSection.content.paddingTop || 0}px</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="200"
+                                    step="4"
+                                    value={activeSection.content.paddingTop || 0}
+                                    onChange={e => updateSection(activeSection.id, { paddingTop: parseInt(e.target.value) })}
+                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <div className="flex justify-between mb-1">
+                                    <label className="block text-xs font-bold text-gray-500">Padding Bottom</label>
+                                    <span className="text-xs text-gray-400">{activeSection.content.paddingBottom || 0}px</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="200"
+                                    step="4"
+                                    value={activeSection.content.paddingBottom || 0}
+                                    onChange={e => updateSection(activeSection.id, { paddingBottom: parseInt(e.target.value) })}
+                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
