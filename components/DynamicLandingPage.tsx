@@ -9,9 +9,11 @@ interface Props {
     isEditing?: boolean;
     pageData?: CMSPage;
     onUpdate?: (page: CMSPage) => void;
+    onSelectSection?: (id: string) => void;
+    activeSectionId?: string;
 }
 
-const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate }) => {
+const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate, onSelectSection, activeSectionId }) => {
     const { slug } = useParams<{ slug: string }>();
     const { cmsPages, fetchCMSPages } = useApp();
     const [page, setPage] = useState<CMSPage | null>(null);
@@ -76,7 +78,20 @@ const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate }) 
             )}
 
             {page.sections.sort((a, b) => a.order - b.order).map(section => (
-                <div key={section.id} className="relative group">
+                <div
+                    key={section.id}
+                    className={`relative group transition-all ${isEditing ? 'cursor-pointer hover:ring-2 hover:ring-blue-400/50' : ''} ${activeSectionId === section.id ? 'ring-2 ring-blue-500 z-10' : ''}`}
+                    onClick={(e) => {
+                        if (isEditing && onSelectSection) {
+                            e.stopPropagation();
+                            onSelectSection(section.id);
+                        }
+                    }}
+                    style={{
+                        backgroundColor: section.content.bgColor,
+                        color: section.content.textColor
+                    }}
+                >
                     <SectionRenderer
                         section={section}
                         isEditing={isEditing}
@@ -124,6 +139,32 @@ const EditableText: React.FC<{
     );
 };
 
+const EditableImage: React.FC<{
+    src: string;
+    className?: string;
+    alt?: string;
+    isEditing?: boolean;
+    onChange: (val: string) => void;
+}> = ({ src, className, alt, isEditing, onChange }) => {
+    const handleEdit = () => {
+        const url = prompt('Enter new image URL:', src);
+        if (url !== null) onChange(url);
+    };
+
+    return (
+        <div className={`relative group ${className} ${isEditing ? 'cursor-pointer' : ''}`} onClick={isEditing ? handleEdit : undefined}>
+            <img src={src || 'https://via.placeholder.com/800x600?text=No+Image'} alt={alt} className="w-full h-full object-cover" />
+            {isEditing && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-white font-bold bg-black/50 px-3 py-1 rounded-full border border-white/50">Change Image</span>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+
 const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUpdate?: (content: any) => void }> = ({ section, isEditing, onUpdate }) => {
     const updateField = (field: string, value: any) => {
         if (onUpdate) onUpdate({ ...section.content, [field]: value });
@@ -132,8 +173,25 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
     switch (section.type) {
         case 'HERO':
             return (
-                <section className="hero-section pt-40 pb-32">
-                    <div className="max-w-4xl mx-auto px-6 text-center">
+                <section className="hero-section relative pt-40 pb-32 overflow-hidden">
+                    {/* Background Image Wrapper */}
+                    <div className="absolute inset-0 z-0">
+                        {section.content.backgroundImage && (
+                            <EditableImage
+                                src={section.content.backgroundImage}
+                                isEditing={isEditing}
+                                onChange={(val) => updateField('backgroundImage', val)}
+                                className="w-full h-full opacity-20"
+                            />
+                        )}
+                        {!section.content.backgroundImage && isEditing && (
+                            <button onClick={() => updateField('backgroundImage', 'https://images.unsplash.com/photo-1519389950473-47ba0277781c')} className="absolute top-4 right-4 z-20 bg-white shadow p-2 rounded text-xs hover:bg-gray-100">
+                                + Add Background Image
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
                         <EditableText
                             tagName="h1"
                             className="hero-title text-6xl md:text-7xl font-black mb-6 leading-[1.1]"
@@ -166,7 +224,19 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
                     <div className="max-w-7xl mx-auto px-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
                             {section.content.items?.map((item: any, idx: number) => (
-                                <div key={idx} className="feature-card p-8 rounded-3xl bg-gray-50 border border-gray-100">
+                                <div key={idx} className="feature-card p-8 rounded-3xl bg-gray-50 border border-gray-100 flex flex-col">
+                                    <div className="w-16 h-16 mb-6 rounded-2xl overflow-hidden bg-gray-200">
+                                        <EditableImage
+                                            src={item.image}
+                                            isEditing={isEditing}
+                                            onChange={(val) => {
+                                                const newItems = [...section.content.items];
+                                                newItems[idx] = { ...item, image: val };
+                                                updateField('items', newItems);
+                                            }}
+                                            className="w-full h-full"
+                                        />
+                                    </div>
                                     <EditableText
                                         tagName="h3"
                                         className="text-2xl font-bold mb-4"
