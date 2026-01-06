@@ -13,6 +13,50 @@ const CMSDashboard: React.FC = () => {
     // History State
     const [history, setHistory] = useState<Partial<CMSPage>[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
+    const ignoreHistoryRef = useState(false)[0]; // Using a stable object or ref. Actually useRef is better but sticking to minimal changes first. 
+    // Wait, useState(false)[0] is constant false. I need useRef.
+    // Let's use React.useRef if imported, or just useRef if I check imports.
+    // 'useState', 'useEffect' are imported. 'useRef' might not be.
+    // I see `import React, { useState, useEffect } from 'react';` at top? 
+    // Let's check imports.
+    // File content shows: import React, { useState, useEffect } from 'react';
+    // So I need to add useRef to imports or use React.useRef.
+    // Let's use React.useRef.
+    const historyRef = React.useRef({ ignore: false });
+
+    // History Effect
+    useEffect(() => {
+        if (editingPage && !historyRef.current.ignore) {
+            // Simple debounce or check to avoid duplicates?
+            setHistory(prev => {
+                const currentHistory = prev.slice(0, historyIndex + 1);
+                const last = currentHistory[currentHistory.length - 1];
+                if (JSON.stringify(last) !== JSON.stringify(editingPage)) {
+                    const next = [...currentHistory, editingPage];
+                    setHistoryIndex(next.length - 1);
+                    return next;
+                }
+                return prev;
+            });
+        }
+        historyRef.current.ignore = false;
+    }, [editingPage]); // historyIndex is in closure but setHistory updater uses prev. 
+    // Actually setHistoryIndex needs to be synced. UseEffect is tricky with coupled state.
+
+    // Alternative: Just use the `updatePage` function BUT make it support functional updates?
+    // User wants "add or write something".
+    // If I use the Functional Update for `setEditingPage` in `addSection`, it works.
+    // But how to push to history?
+    // Inside `addSection`, after `setEditingPage`, we can't easily push to history.
+
+    // Let's stick to the useEffect approach but refine it.
+    // We need `historyIndex` in the dependency array?
+    // If we add `historyIndex`, it runs on undo/redo.
+    // Hence `ignoreHistoryRef`.
+
+    // Correction:
+    // const last = history[historyIndex]; // need 'history' and 'historyIndex' in deps.
+    // If we add them, we need to ensure we don't loop.
 
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
     const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
@@ -29,22 +73,16 @@ const CMSDashboard: React.FC = () => {
             status: 'DRAFT',
             sections: []
         };
+        // Initial setup
+        historyRef.current.ignore = true;
         setEditingPage(newPage);
         setHistory([newPage]);
         setHistoryIndex(0);
     };
 
-    const updatePage = (newPage: Partial<CMSPage>) => {
-        setEditingPage(newPage);
-        // Add to history
-        const newHistory = history.slice(0, historyIndex + 1);
-        newHistory.push(newPage);
-        setHistory(newHistory);
-        setHistoryIndex(newHistory.length - 1);
-    };
-
     const undo = () => {
         if (historyIndex > 0) {
+            historyRef.current.ignore = true;
             setHistoryIndex(historyIndex - 1);
             setEditingPage(history[historyIndex - 1]);
         }
@@ -52,6 +90,7 @@ const CMSDashboard: React.FC = () => {
 
     const redo = () => {
         if (historyIndex < history.length - 1) {
+            historyRef.current.ignore = true;
             setHistoryIndex(historyIndex + 1);
             setEditingPage(history[historyIndex + 1]);
         }
@@ -60,8 +99,6 @@ const CMSDashboard: React.FC = () => {
     const handleSave = async () => {
         if (editingPage) {
             await saveCMSPage(editingPage);
-            // Don't close editor on save, mimic "Update" button
-            // setEditingPage(null); 
         }
     };
 
@@ -71,13 +108,19 @@ const CMSDashboard: React.FC = () => {
             id: Math.random().toString(36).substr(2, 9),
             type,
             content: getInitialContent(type),
-            order: (editingPage.sections?.length || 0) + 1
+            order: 9999 // Helper will re-sort
         };
-        const newPage = {
-            ...editingPage,
-            sections: [...(editingPage.sections || []), newSection]
-        };
-        updatePage(newPage);
+
+        setEditingPage(prev => {
+            if (!prev) return prev;
+            const sections = [...(prev.sections || []), newSection];
+            // Reassign orders
+            const reordered = sections.map((s, i) => ({ ...s, order: i + 1 }));
+            return {
+                ...prev,
+                sections: reordered
+            };
+        });
         setActiveSectionId(newSection.id);
     };
 
@@ -94,33 +137,38 @@ const CMSDashboard: React.FC = () => {
     };
 
     const removeSection = (id: string) => {
-        if (!editingPage) return;
-        const newPage = {
-            ...editingPage,
-            sections: editingPage.sections?.filter(s => s.id !== id)
-        };
-        updatePage(newPage);
+        setEditingPage(prev => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                sections: prev.sections?.filter(s => s.id !== id)
+            };
+        });
         if (activeSectionId === id) setActiveSectionId(null);
     };
 
     const moveSection = (id: string, direction: 'up' | 'down') => {
-        if (!editingPage || !editingPage.sections) return;
-        const idx = editingPage.sections.findIndex(s => s.id === id);
-        if (idx === -1) return;
+        setEditingPage(prev => {
+            if (!prev || !prev.sections) return prev;
+            const idx = prev.sections.findIndex(s => s.id === id);
+            if (idx === -1) return prev;
 
-        const newSections = [...editingPage.sections];
-        if (direction === 'up' && idx > 0) {
-            [newSections[idx], newSections[idx - 1]] = [newSections[idx - 1], newSections[idx]];
-        } else if (direction === 'down' && idx < newSections.length - 1) {
-            [newSections[idx], newSections[idx + 1]] = [newSections[idx + 1], newSections[idx]];
-        }
-        updatePage({ ...editingPage, sections: newSections });
+            const newSections = [...prev.sections];
+            if (direction === 'up' && idx > 0) {
+                [newSections[idx], newSections[idx - 1]] = [newSections[idx - 1], newSections[idx]];
+            } else if (direction === 'down' && idx < newSections.length - 1) {
+                [newSections[idx], newSections[idx + 1]] = [newSections[idx + 1], newSections[idx]];
+            }
+            return { ...prev, sections: newSections };
+        });
     };
 
     const updateSection = (id: string, updates: any) => {
-        if (!editingPage || !editingPage.sections) return;
-        const newSections = editingPage.sections.map(s => s.id === id ? { ...s, content: { ...s.content, ...updates } } : s);
-        updatePage({ ...editingPage, sections: newSections });
+        setEditingPage(prev => {
+            if (!prev || !prev.sections) return prev;
+            const newSections = prev.sections.map(s => s.id === id ? { ...s, content: { ...s.content, ...updates } } : s);
+            return { ...prev, sections: newSections };
+        });
     };
 
     const activeSection = editingPage?.sections?.find(s => s.id === activeSectionId);
@@ -131,7 +179,7 @@ const CMSDashboard: React.FC = () => {
                 {/* Unified Left Sidebar */}
                 <ElementorSidebar
                     editingPage={editingPage}
-                    setEditingPage={updatePage}
+                    setEditingPage={setEditingPage}
                     activeSection={activeSection}
                     setActiveSectionId={setActiveSectionId}
                     addSection={addSection}
@@ -167,7 +215,7 @@ const CMSDashboard: React.FC = () => {
                             <DynamicLandingPage
                                 isEditing={true}
                                 pageData={editingPage as CMSPage}
-                                onUpdate={(updatedPage) => updatePage(updatedPage)}
+                                onUpdate={setEditingPage}
                                 onSelectSection={setActiveSectionId}
                                 activeSectionId={activeSectionId}
                             />
@@ -501,54 +549,55 @@ const ElementorSidebar: React.FC<{
                     </div>
                 </div>
             )}
-        </div>
 
-            {/* Bottom Toolbar */ }
-    <div className="border-t bg-white p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20">
-        <div className="flex items-center justify-between mb-3 px-1">
-            <button
-                title="Settings"
-                onClick={() => { setActiveSectionId(null); setSidebarMode('SETTINGS'); }}
-                className={`transition-colors ${sidebarMode === 'SETTINGS' ? 'text-green-600' : 'text-gray-400 hover:text-gray-700'}`}
-            >
-                <ICONS.Settings size={20} />
-            </button>
-            <button
-                title="Navigator"
-                onClick={() => { setActiveSectionId(null); setSidebarMode('NAVIGATOR'); }}
-                className={`transition-colors ${sidebarMode === 'NAVIGATOR' ? 'text-green-600' : 'text-gray-400 hover:text-gray-700'}`}
-            >
-                <ICONS.Trello size={20} />
-            </button>
-            <div className="relative group">
-                <button title="History" className="text-gray-400 hover:text-gray-700"><ICONS.History size={20} /></button>
-                {/* Undo/Redo Popover on Hover (Simple) */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white shadow-xl border rounded-lg p-1 flex hidden group-hover:flex">
-                    <button title="Undo" disabled={!canUndo} onClick={undo} className="p-2 hover:bg-gray-100 rounded disabled:opacity-30"><ICONS.ArrowRight className="-rotate-180" size={16} /></button>
-                    <button title="Redo" disabled={!canRedo} onClick={redo} className="p-2 hover:bg-gray-100 rounded disabled:opacity-30"><ICONS.ArrowRight size={16} /></button>
+
+            {/* Bottom Toolbar */}
+            <div className="border-t bg-white p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20">
+                <div className="flex items-center justify-between mb-3 px-1">
+                    <button
+                        title="Settings"
+                        onClick={() => { setActiveSectionId(null); setSidebarMode('SETTINGS'); }}
+                        className={`transition-colors ${sidebarMode === 'SETTINGS' ? 'text-green-600' : 'text-gray-400 hover:text-gray-700'}`}
+                    >
+                        <ICONS.Settings size={20} />
+                    </button>
+                    <button
+                        title="Navigator"
+                        onClick={() => { setActiveSectionId(null); setSidebarMode('NAVIGATOR'); }}
+                        className={`transition-colors ${sidebarMode === 'NAVIGATOR' ? 'text-green-600' : 'text-gray-400 hover:text-gray-700'}`}
+                    >
+                        <ICONS.Trello size={20} />
+                    </button>
+                    <div className="relative group">
+                        <button title="History" className="text-gray-400 hover:text-gray-700"><ICONS.History size={20} /></button>
+                        {/* Undo/Redo Popover on Hover (Simple) */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white shadow-xl border rounded-lg p-1 flex hidden group-hover:flex">
+                            <button title="Undo" disabled={!canUndo} onClick={undo} className="p-2 hover:bg-gray-100 rounded disabled:opacity-30"><ICONS.ArrowRight className="-rotate-180" size={16} /></button>
+                            <button title="Redo" disabled={!canRedo} onClick={redo} className="p-2 hover:bg-gray-100 rounded disabled:opacity-30"><ICONS.ArrowRight size={16} /></button>
+                        </div>
+                    </div>
+                    <div className="h-4 w-px bg-gray-300"></div>
+                    <button
+                        title="Desktop Mode"
+                        onClick={() => setViewMode('desktop')}
+                        className={viewMode === 'desktop' ? 'text-green-600' : 'text-gray-400 hover:text-black'}
+                    >
+                        <ICONS.Layout size={20} />
+                    </button>
+                    <button
+                        title="Mobile Mode"
+                        onClick={() => setViewMode('mobile')}
+                        className={viewMode === 'mobile' ? 'text-green-600' : 'text-gray-400 hover:text-black'}
+                    >
+                        <ICONS.Zap size={20} />
+                    </button>
+                    <button onClick={handlePreview} title="Preview" className="text-gray-400 hover:text-gray-700"><ICONS.Eye size={20} /></button>
                 </div>
+                <button onClick={handleSave} className="w-full py-2.5 bg-green-600 text-white font-bold uppercase tracking-wider text-xs rounded hover:bg-green-700 transition-all shadow-sm active:transform active:scale-95">
+                    Update
+                </button>
             </div>
-            <div className="h-4 w-px bg-gray-300"></div>
-            <button
-                title="Desktop Mode"
-                onClick={() => setViewMode('desktop')}
-                className={viewMode === 'desktop' ? 'text-green-600' : 'text-gray-400 hover:text-black'}
-            >
-                <ICONS.Layout size={20} />
-            </button>
-            <button
-                title="Mobile Mode"
-                onClick={() => setViewMode('mobile')}
-                className={viewMode === 'mobile' ? 'text-green-600' : 'text-gray-400 hover:text-black'}
-            >
-                <ICONS.Zap size={20} />
-            </button>
-            <button onClick={handlePreview} title="Preview" className="text-gray-400 hover:text-gray-700"><ICONS.Eye size={20} /></button>
-        </div>
-        <button onClick={handleSave} className="w-full py-2.5 bg-green-600 text-white font-bold uppercase tracking-wider text-xs rounded hover:bg-green-700 transition-all shadow-sm active:transform active:scale-95">
-            Update
-        </button>
-    </div>
+        </div >
     );
 };
 
