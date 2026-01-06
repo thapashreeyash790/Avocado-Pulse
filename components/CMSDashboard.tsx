@@ -10,6 +10,10 @@ import DynamicLandingPage from './DynamicLandingPage';
 const CMSDashboard: React.FC = () => {
     const { cmsPages, saveCMSPage, deleteCMSPage, fetchCMSPages } = useApp();
     const [editingPage, setEditingPage] = useState<Partial<CMSPage> | null>(null);
+    // History State
+    const [history, setHistory] = useState<Partial<CMSPage>[]>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
+
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
     const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
     const navigate = useNavigate();
@@ -19,12 +23,38 @@ const CMSDashboard: React.FC = () => {
     }, [fetchCMSPages]);
 
     const handleCreatePage = () => {
-        setEditingPage({
+        const newPage = {
             title: 'New Page',
             slug: 'new-page',
             status: 'DRAFT',
             sections: []
-        });
+        };
+        setEditingPage(newPage);
+        setHistory([newPage]);
+        setHistoryIndex(0);
+    };
+
+    const updatePage = (newPage: Partial<CMSPage>) => {
+        setEditingPage(newPage);
+        // Add to history
+        const newHistory = history.slice(0, historyIndex + 1);
+        newHistory.push(newPage);
+        setHistory(newHistory);
+        setHistoryIndex(newHistory.length - 1);
+    };
+
+    const undo = () => {
+        if (historyIndex > 0) {
+            setHistoryIndex(historyIndex - 1);
+            setEditingPage(history[historyIndex - 1]);
+        }
+    };
+
+    const redo = () => {
+        if (historyIndex < history.length - 1) {
+            setHistoryIndex(historyIndex + 1);
+            setEditingPage(history[historyIndex + 1]);
+        }
     };
 
     const handleSave = async () => {
@@ -43,10 +73,11 @@ const CMSDashboard: React.FC = () => {
             content: getInitialContent(type),
             order: (editingPage.sections?.length || 0) + 1
         };
-        setEditingPage({
+        const newPage = {
             ...editingPage,
             sections: [...(editingPage.sections || []), newSection]
-        });
+        };
+        updatePage(newPage);
         setActiveSectionId(newSection.id);
     };
 
@@ -64,10 +95,11 @@ const CMSDashboard: React.FC = () => {
 
     const removeSection = (id: string) => {
         if (!editingPage) return;
-        setEditingPage({
+        const newPage = {
             ...editingPage,
             sections: editingPage.sections?.filter(s => s.id !== id)
-        });
+        };
+        updatePage(newPage);
         if (activeSectionId === id) setActiveSectionId(null);
     };
 
@@ -82,13 +114,13 @@ const CMSDashboard: React.FC = () => {
         } else if (direction === 'down' && idx < newSections.length - 1) {
             [newSections[idx], newSections[idx + 1]] = [newSections[idx + 1], newSections[idx]];
         }
-        setEditingPage({ ...editingPage, sections: newSections });
+        updatePage({ ...editingPage, sections: newSections });
     };
 
     const updateSection = (id: string, updates: any) => {
         if (!editingPage || !editingPage.sections) return;
         const newSections = editingPage.sections.map(s => s.id === id ? { ...s, content: { ...s.content, ...updates } } : s);
-        setEditingPage({ ...editingPage, sections: newSections });
+        updatePage({ ...editingPage, sections: newSections });
     };
 
     const activeSection = editingPage?.sections?.find(s => s.id === activeSectionId);
@@ -99,7 +131,7 @@ const CMSDashboard: React.FC = () => {
                 {/* Unified Left Sidebar */}
                 <ElementorSidebar
                     editingPage={editingPage}
-                    setEditingPage={setEditingPage}
+                    setEditingPage={updatePage}
                     activeSection={activeSection}
                     setActiveSectionId={setActiveSectionId}
                     addSection={addSection}
@@ -109,6 +141,11 @@ const CMSDashboard: React.FC = () => {
                     handleSave={handleSave}
                     viewMode={viewMode}
                     setViewMode={setViewMode}
+                    onExit={() => setEditingPage(null)}
+                    undo={undo}
+                    redo={redo}
+                    canUndo={historyIndex > 0}
+                    canRedo={historyIndex < history.length - 1}
                 />
 
                 {/* Canvas Area */}
@@ -130,7 +167,7 @@ const CMSDashboard: React.FC = () => {
                             <DynamicLandingPage
                                 isEditing={true}
                                 pageData={editingPage as CMSPage}
-                                onUpdate={(updatedPage) => setEditingPage(updatedPage)}
+                                onUpdate={(updatedPage) => updatePage(updatedPage)}
                                 onSelectSection={setActiveSectionId}
                                 activeSectionId={activeSectionId}
                             />
@@ -193,10 +230,15 @@ const ElementorSidebar: React.FC<{
     handleSave: () => void;
     viewMode: 'desktop' | 'mobile';
     setViewMode: (mode: 'desktop' | 'mobile') => void;
-}> = ({ editingPage, setEditingPage, activeSection, setActiveSectionId, addSection, moveSection, removeSection, updateSection, handleSave, viewMode, setViewMode }) => {
+    onExit: () => void;
+    undo: () => void;
+    redo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
+}> = ({ editingPage, setEditingPage, activeSection, setActiveSectionId, addSection, moveSection, removeSection, updateSection, handleSave, viewMode, setViewMode, onExit, undo, redo, canUndo, canRedo }) => {
 
     // Internal state for sidebar view
-    const [sidebarMode, setSidebarMode] = useState<'WIDGETS' | 'PROPERTIES'>('WIDGETS');
+    const [sidebarMode, setSidebarMode] = useState<'WIDGETS' | 'PROPERTIES' | 'SETTINGS' | 'NAVIGATOR'>('WIDGETS');
     const [sidebarTab, setSidebarTab] = useState<'content' | 'style'>('content');
 
     // Auto-switch to properties when section is selected
@@ -204,10 +246,16 @@ const ElementorSidebar: React.FC<{
         if (activeSection) {
             setSidebarMode('PROPERTIES');
             setSidebarTab('content'); // Reset to content tab on new selection
-        } else {
+        } else if (sidebarMode === 'PROPERTIES') {
             setSidebarMode('WIDGETS');
         }
-    }, [activeSection]);
+    }, [activeSection, sidebarMode]);
+
+    const handlePreview = () => {
+        if (editingPage.slug) {
+            window.open(`/${editingPage.slug}`, '_blank');
+        }
+    };
 
     // Widget Icons Mapping
     const WIDGETS = [
@@ -223,7 +271,7 @@ const ElementorSidebar: React.FC<{
         <div className="w-[300px] flex flex-col bg-white border-r border-gray-300 shadow-xl shrink-0 z-50">
             {/* Header */}
             <div className="h-12 bg-white border-b flex items-center justify-between px-4 shadow-sm relative z-20">
-                <button title="Menu" onClick={() => setEditingPage(null)} className="p-2 text-gray-500 hover:text-red-600 transition-colors">
+                <button title="Menu" onClick={onExit} className="p-2 text-gray-500 hover:text-red-600 transition-colors">
                     <ICONS.Menu size={20} />
                 </button>
                 <div className="font-bold text-gray-800 uppercase tracking-widest text-xs">Elementor CMS</div>
@@ -388,34 +436,120 @@ const ElementorSidebar: React.FC<{
                 )}
             </div>
 
-            {/* Bottom Toolbar */}
-            <div className="border-t bg-white p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20">
-                <div className="flex items-center justify-between mb-3 px-1">
-                    <button title="Settings" className="text-gray-400 hover:text-gray-700"><ICONS.Settings size={20} /></button>
-                    <button title="Navigator" className="text-gray-400 hover:text-gray-700"><ICONS.Trello size={20} /></button>
-                    <button title="History" className="text-gray-400 hover:text-gray-700"><ICONS.History size={20} /></button>
-                    <div className="h-4 w-px bg-gray-300"></div>
-                    <button
-                        title="Desktop Mode"
-                        onClick={() => setViewMode('desktop')}
-                        className={viewMode === 'desktop' ? 'text-green-600' : 'text-gray-400 hover:text-black'}
-                    >
-                        <ICONS.Layout size={20} />
-                    </button>
-                    <button
-                        title="Mobile Mode"
-                        onClick={() => setViewMode('mobile')}
-                        className={viewMode === 'mobile' ? 'text-green-600' : 'text-gray-400 hover:text-black'}
-                    >
-                        <ICONS.Zap size={20} />
-                    </button>
-                    <button title="Preview" className="text-gray-400 hover:text-gray-700"><ICONS.Search size={20} /></button>
+            {sidebarMode === 'SETTINGS' && (
+                <div className="p-5 space-y-6">
+                    <div className="border-b pb-4 mb-4">
+                        <h3 className="font-black text-lg text-gray-800">Page Settings</h3>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Title</label>
+                        <input
+                            type="text"
+                            className="w-full p-2 border rounded text-sm"
+                            value={editingPage.title || ''}
+                            onChange={e => setEditingPage({ ...editingPage, title: e.target.value })}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Slug</label>
+                        <div className="flex items-center border rounded bg-gray-50">
+                            <span className="pl-2 text-gray-400 text-xs">/</span>
+                            <input
+                                type="text"
+                                className="w-full p-2 bg-transparent border-none text-sm focus:ring-0"
+                                value={editingPage.slug || ''}
+                                onChange={e => setEditingPage({ ...editingPage, slug: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Status</label>
+                        <select
+                            value={editingPage.status}
+                            onChange={e => setEditingPage({ ...editingPage, status: e.target.value as any })}
+                            className="w-full p-2 border rounded text-sm bg-white"
+                        >
+                            <option value="DRAFT">Draft</option>
+                            <option value="PUBLISHED">Published</option>
+                        </select>
+                    </div>
                 </div>
-                <button onClick={handleSave} className="w-full py-2.5 bg-green-600 text-white font-bold uppercase tracking-wider text-xs rounded hover:bg-green-700 transition-all">
-                    Update
-                </button>
-            </div>
+            )}
+
+            {sidebarMode === 'NAVIGATOR' && (
+                <div className="p-4 h-full flex flex-col">
+                    <div className="border-b pb-4 mb-4 flex justify-between items-center">
+                        <h3 className="font-black text-lg text-gray-800">Navigator</h3>
+                        <span className="text-xs text-gray-400">{editingPage.sections?.length || 0} Sections</span>
+                    </div>
+                    <div className="space-y-2 flex-1 overflow-y-auto">
+                        {editingPage.sections?.map((section, idx) => (
+                            <div
+                                key={section.id}
+                                className={`p-3 rounded border flex items-center gap-3 cursor-pointer transition-colors ${activeSection?.id === section.id ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100 hover:bg-gray-50'}`}
+                                onClick={() => setActiveSectionId(section.id)}
+                            >
+                                <span className="text-gray-400 text-xs font-mono w-4">{idx + 1}</span>
+                                <ICONS.Layout className="text-gray-400" size={14} />
+                                <span className="text-sm font-medium text-gray-700">{section.type}</span>
+                                {activeSection?.id === section.id && <div className="ml-auto w-2 h-2 rounded-full bg-blue-500"></div>}
+                            </div>
+                        ))}
+                        {(!editingPage.sections || editingPage.sections.length === 0) && (
+                            <div className="text-center text-gray-400 text-xs py-10">No sections added yet.</div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
+
+            {/* Bottom Toolbar */ }
+    <div className="border-t bg-white p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20">
+        <div className="flex items-center justify-between mb-3 px-1">
+            <button
+                title="Settings"
+                onClick={() => { setActiveSectionId(null); setSidebarMode('SETTINGS'); }}
+                className={`transition-colors ${sidebarMode === 'SETTINGS' ? 'text-green-600' : 'text-gray-400 hover:text-gray-700'}`}
+            >
+                <ICONS.Settings size={20} />
+            </button>
+            <button
+                title="Navigator"
+                onClick={() => { setActiveSectionId(null); setSidebarMode('NAVIGATOR'); }}
+                className={`transition-colors ${sidebarMode === 'NAVIGATOR' ? 'text-green-600' : 'text-gray-400 hover:text-gray-700'}`}
+            >
+                <ICONS.Trello size={20} />
+            </button>
+            <div className="relative group">
+                <button title="History" className="text-gray-400 hover:text-gray-700"><ICONS.History size={20} /></button>
+                {/* Undo/Redo Popover on Hover (Simple) */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white shadow-xl border rounded-lg p-1 flex hidden group-hover:flex">
+                    <button title="Undo" disabled={!canUndo} onClick={undo} className="p-2 hover:bg-gray-100 rounded disabled:opacity-30"><ICONS.ArrowRight className="-rotate-180" size={16} /></button>
+                    <button title="Redo" disabled={!canRedo} onClick={redo} className="p-2 hover:bg-gray-100 rounded disabled:opacity-30"><ICONS.ArrowRight size={16} /></button>
+                </div>
+            </div>
+            <div className="h-4 w-px bg-gray-300"></div>
+            <button
+                title="Desktop Mode"
+                onClick={() => setViewMode('desktop')}
+                className={viewMode === 'desktop' ? 'text-green-600' : 'text-gray-400 hover:text-black'}
+            >
+                <ICONS.Layout size={20} />
+            </button>
+            <button
+                title="Mobile Mode"
+                onClick={() => setViewMode('mobile')}
+                className={viewMode === 'mobile' ? 'text-green-600' : 'text-gray-400 hover:text-black'}
+            >
+                <ICONS.Zap size={20} />
+            </button>
+            <button onClick={handlePreview} title="Preview" className="text-gray-400 hover:text-gray-700"><ICONS.Search size={20} /></button>
+        </div>
+        <button onClick={handleSave} className="w-full py-2.5 bg-green-600 text-white font-bold uppercase tracking-wider text-xs rounded hover:bg-green-700 transition-all shadow-sm active:transform active:scale-95">
+            Update
+        </button>
+    </div>
+        </div >
     );
 };
 
