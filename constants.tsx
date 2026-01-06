@@ -36,7 +36,8 @@ import {
   Moon,
   Video,
   Menu,
-  Type
+  Type,
+  Eye
 } from 'lucide-react';
 
 export const ICONS = {
@@ -75,7 +76,8 @@ export const ICONS = {
   Moon,
   Video,
   Menu,
-  Type
+  Type,
+  Eye
 };
 
 export const PRIORITY_COLORS = {

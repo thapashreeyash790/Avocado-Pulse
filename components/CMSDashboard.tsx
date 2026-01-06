@@ -543,13 +543,12 @@ const ElementorSidebar: React.FC<{
             >
                 <ICONS.Zap size={20} />
             </button>
-            <button onClick={handlePreview} title="Preview" className="text-gray-400 hover:text-gray-700"><ICONS.Search size={20} /></button>
+            <button onClick={handlePreview} title="Preview" className="text-gray-400 hover:text-gray-700"><ICONS.Eye size={20} /></button>
         </div>
         <button onClick={handleSave} className="w-full py-2.5 bg-green-600 text-white font-bold uppercase tracking-wider text-xs rounded hover:bg-green-700 transition-all shadow-sm active:transform active:scale-95">
             Update
         </button>
     </div>
-        </div >
     );
 };
 
