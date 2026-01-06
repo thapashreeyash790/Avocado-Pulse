@@ -66,7 +66,10 @@ const LoginView: React.FC<LoginViewProps> = ({ initialIsLogin = true }) => {
           return;
         }
       }
-    } catch (err) { }
+    } catch (err) {
+      console.error('Login/Signup error:', err);
+      // Error is already handled by AppContext and shown via error state
+    }
   };
 
   const handleResend = () => {

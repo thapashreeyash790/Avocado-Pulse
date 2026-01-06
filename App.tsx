@@ -41,6 +41,7 @@ const AuthenticatedApp: React.FC = () => {
       <Routes>
         <Route index element={<DashboardView />} />
         <Route path="board" element={<KanbanBoard />} />
+        <Route path="mystuff" element={<MyStuffView />} />
         <Route path="timeline" element={<TimelineView />} />
         <Route path="management" element={<ManagementView />} />
         <Route path="sales" element={<SalesView />} />
