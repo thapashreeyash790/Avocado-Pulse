@@ -5,6 +5,7 @@ import { useApp } from '../store/AppContext';
 import { CMSPage, CMSSection } from '../types';
 import { ICONS } from '../constants';
 import '../components/LandingPage.css'; // Reuse some landing page styles
+import DynamicLandingPage from './DynamicLandingPage';
 
 const CMSDashboard: React.FC = () => {
     const { cmsPages, saveCMSPage, deleteCMSPage, fetchCMSPages } = useApp();
@@ -81,104 +82,87 @@ const CMSDashboard: React.FC = () => {
 
     if (editingPage) {
         return (
-            <div className="p-8 max-w-4xl mx-auto">
-                <div className="flex justify-between items-center mb-8">
-                    <h2 className="text-2xl font-bold">Edit Landing Page</h2>
-                    <div className="space-x-4">
-                        <button onClick={() => setEditingPage(null)} className="px-4 py-2 border rounded">Cancel</button>
-                        <button onClick={handleSave} className="px-4 py-2 bg-green-600 text-white rounded">Save Page</button>
+            <div className="fixed inset-0 z-[60] bg-white overflow-hidden flex flex-col">
+                {/* Visual Editor Toolbar */}
+                <div className="h-16 border-b bg-white flex items-center justify-between px-6 shadow-sm z-50">
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => setEditingPage(null)} className="text-gray-500 hover:text-black font-medium">← Back</button>
+                        <div className="h-6 w-px bg-gray-200"></div>
+                        <input
+                            type="text"
+                            className="font-bold text-lg bg-transparent border-none focus:ring-0 p-0 w-64"
+                            value={editingPage.title || ''}
+                            onChange={e => setEditingPage({ ...editingPage, title: e.target.value })}
+                            placeholder="Page Title"
+                        />
+                        <span className="text-gray-400">/</span>
+                        <input
+                            type="text"
+                            className="text-sm text-gray-600 bg-transparent border-none focus:ring-0 p-0 w-48"
+                            value={editingPage.slug || ''}
+                            onChange={e => setEditingPage({ ...editingPage, slug: e.target.value })}
+                            placeholder="slug"
+                        />
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="flex rounded-lg bg-gray-100 p-1">
+                            <button className="px-3 py-1.5 rounded-md text-sm font-medium bg-white shadow-sm text-black">Desktop</button>
+                            <button className="px-3 py-1.5 rounded-md text-sm font-medium text-gray-500 hover:text-black">Mobile</button>
+                        </div>
+                        <div className="h-6 w-px bg-gray-200 mx-2"></div>
+                        <button onClick={handleSave} className="px-6 py-2 bg-black text-white rounded-lg font-bold hover:bg-gray-800 transition-all">Save Changes</button>
                     </div>
                 </div>
 
-                <div className="space-y-6">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Page Title</label>
-                        <input
-                            type="text"
-                            className="w-full p-2 border rounded"
-                            value={editingPage.title || ''}
-                            onChange={e => setEditingPage({ ...editingPage, title: e.target.value })}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Slug (URL path)</label>
-                        <input
-                            type="text"
-                            className="w-full p-2 border rounded"
-                            value={editingPage.slug || ''}
-                            onChange={e => setEditingPage({ ...editingPage, slug: e.target.value })}
-                        />
-                    </div>
+                {/* Editor Surface */}
+                <div className="flex-1 overflow-y-auto bg-gray-100 flex">
+                    {/* Components Sidebar */}
+                    <div className="w-64 bg-white border-r h-full p-6 overflow-y-auto">
+                        <h3 className="font-bold text-xs uppercase text-gray-400 mb-4 tracking-wider">Add Sections</h3>
+                        <div className="space-y-3">
+                            <button onClick={() => addSection('HERO')} className="w-full p-4 border rounded-xl hover:border-green-500 hover:bg-green-50 text-left transition-all group">
+                                <div className="font-bold text-gray-700 group-hover:text-green-700">Hero Section</div>
+                                <div className="text-xs text-gray-400 mt-1">Large header with CTA</div>
+                            </button>
+                            <button onClick={() => addSection('FEATURES')} className="w-full p-4 border rounded-xl hover:border-green-500 hover:bg-green-50 text-left transition-all group">
+                                <div className="font-bold text-gray-700 group-hover:text-green-700">Features Grid</div>
+                                <div className="text-xs text-gray-400 mt-1">3-column feature list</div>
+                            </button>
+                            <button onClick={() => addSection('PRICING')} className="w-full p-4 border rounded-xl hover:border-green-500 hover:bg-green-50 text-left transition-all group">
+                                <div className="font-bold text-gray-700 group-hover:text-green-700">Pricing Table</div>
+                                <div className="text-xs text-gray-400 mt-1">Compare plans</div>
+                            </button>
+                            <button onClick={() => addSection('NARRATIVE')} className="w-full p-4 border rounded-xl hover:border-green-500 hover:bg-green-50 text-left transition-all group">
+                                <div className="font-bold text-gray-700 group-hover:text-green-700">Narrative</div>
+                                <div className="text-xs text-gray-400 mt-1">Text content block</div>
+                            </button>
+                        </div>
 
-                    <div className="border-t pt-6">
-                        <h3 className="text-lg font-semibold mb-4">Sections</h3>
+                        <h3 className="font-bold text-xs uppercase text-gray-400 mb-4 tracking-wider mt-8">Page Settings</h3>
                         <div className="space-y-4">
-                            {editingPage.sections?.map((section, idx) => (
-                                <div key={section.id} className="border p-4 rounded bg-gray-50 flex items-start space-x-4">
-                                    <div className="flex-1">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="font-bold text-green-700">{section.type} Section</span>
-                                            <div className="space-x-2">
-                                                <button onClick={() => moveSection(section.id, 'up')} className="text-gray-500 hover:text-black">↑</button>
-                                                <button onClick={() => moveSection(section.id, 'down')} className="text-gray-500 hover:text-black">↓</button>
-                                                <button onClick={() => removeSection(section.id)} className="text-red-500">Remove</button>
-                                            </div>
-                                        </div>
-                                        {/* Render specific editor based on type */}
-                                        {section.type === 'HERO' && (
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <input className="p-2 border rounded" value={section.content.title} onChange={e => {
-                                                    const newSections = [...(editingPage.sections || [])];
-                                                    newSections[idx].content.title = e.target.value;
-                                                    setEditingPage({ ...editingPage, sections: newSections });
-                                                }} placeholder="Title" />
-                                                <input className="p-2 border rounded" value={section.content.subtitle} onChange={e => {
-                                                    const newSections = [...(editingPage.sections || [])];
-                                                    newSections[idx].content.subtitle = e.target.value;
-                                                    setEditingPage({ ...editingPage, sections: newSections });
-                                                }} placeholder="Subtitle" />
-                                            </div>
-                                        )}
-                                        {section.type === 'FEATURES' && (
-                                            <div className="space-y-2">
-                                                {section.content.items?.map((item: any, itemIdx: number) => (
-                                                    <div key={itemIdx} className="flex space-x-2">
-                                                        <input className="p-2 border rounded flex-1" value={item.title} onChange={e => {
-                                                            const newSections = [...(editingPage.sections || [])];
-                                                            newSections[idx].content.items[itemIdx].title = e.target.value;
-                                                            setEditingPage({ ...editingPage, sections: newSections });
-                                                        }} placeholder="Feature title" />
-                                                        <button className="text-red-500" onClick={() => {
-                                                            const newSections = [...(editingPage.sections || [])];
-                                                            newSections[idx].content.items.splice(itemIdx, 1);
-                                                            setEditingPage({ ...editingPage, sections: newSections });
-                                                        }}>x</button>
-                                                    </div>
-                                                ))}
-                                                <button onClick={() => {
-                                                    const newSections = [...(editingPage.sections || [])];
-                                                    if (!newSections[idx].content.items) newSections[idx].content.items = [];
-                                                    newSections[idx].content.items.push({ title: 'New Feature', description: '' });
-                                                    setEditingPage({ ...editingPage, sections: newSections });
-                                                }} className="text-sm text-green-600">+ Add Feature</button>
-                                            </div>
-                                        )}
-                                        {/* Other section types would have similar minimal editors */}
-                                        {['PRICING', 'FAQ', 'TESTIMONIALS', 'NARRATIVE'].includes(section.type) && (
-                                            <div className="text-gray-500 italic">Editor for {section.type} placeholder</div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Status</label>
+                                <select
+                                    value={editingPage.status}
+                                    onChange={e => setEditingPage({ ...editingPage, status: e.target.value as any })}
+                                    className="w-full p-2 border rounded-lg text-sm"
+                                >
+                                    <option value="DRAFT">Draft</option>
+                                    <option value="PUBLISHED">Published</option>
+                                </select>
+                            </div>
                         </div>
+                    </div>
 
-                        <div className="mt-6 flex flex-wrap gap-2">
-                            <button onClick={() => addSection('HERO')} className="px-3 py-1 bg-gray-100 rounded hover:bg-gray-200">Add Hero</button>
-                            <button onClick={() => addSection('FEATURES')} className="px-3 py-1 bg-gray-100 rounded hover:bg-gray-200">Add Features</button>
-                            <button onClick={() => addSection('PRICING')} className="px-3 py-1 bg-gray-100 rounded hover:bg-gray-200">Add Pricing</button>
-                            <button onClick={() => addSection('FAQ')} className="px-3 py-1 bg-gray-100 rounded hover:bg-gray-200">Add FAQ</button>
-                            <button onClick={() => addSection('TESTIMONIALS')} className="px-3 py-1 bg-gray-100 rounded hover:bg-gray-200">Add Testimonials</button>
-                        </div>
+                    {/* Preview Area */}
+                    <div className="flex-1 overflow-y-auto relative">
+                        {/* We use a key to force re-render if needed, but props update should suffice */}
+                        {/* We import DynamicLandingPage dynamically to avoid circular deps if they exist, or just use the component */}
+                        <DynamicLandingPage
+                            isEditing={true}
+                            pageData={editingPage as CMSPage}
+                            onUpdate={(updatedPage) => setEditingPage(updatedPage)}
+                        />
                     </div>
                 </div>
             </div>
