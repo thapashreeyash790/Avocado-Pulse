@@ -300,8 +300,9 @@ const ElementorSidebar: React.FC<{
     }, [activeSection, sidebarMode]);
 
     const handlePreview = () => {
-        if (editingPage.slug) {
-            window.open(`/${editingPage.slug}`, '_blank');
+        if (editingPage) {
+            localStorage.setItem('cms_preview_data', JSON.stringify(editingPage));
+            window.open('/#/preview', '_blank');
         }
     };
 

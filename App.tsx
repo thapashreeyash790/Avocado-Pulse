@@ -19,6 +19,7 @@ import MyStuffView from './components/MyStuffView';
 import LandingPage from './components/LandingPage';
 import CMSDashboard from './components/CMSDashboard';
 import DynamicLandingPage from './components/DynamicLandingPage';
+import CMSPreview from './components/CMSPreview';
 import { AppProvider, useApp } from './store/AppContext';
 import { ICONS } from './constants';
 import { UserRole } from './types';
@@ -62,6 +63,7 @@ const AppRoutes: React.FC = () => {
   return (
     <Routes>
       <Route path="/" element={user ? <Navigate to="/app" replace /> : <DynamicLandingPage />} />
+      <Route path="/preview" element={<CMSPreview />} />
       <Route path="/p/:slug" element={<DynamicLandingPage />} />
       <Route path="/login" element={<LoginView initialIsLogin={true} />} />
       <Route path="/signup" element={<LoginView initialIsLogin={false} />} />
