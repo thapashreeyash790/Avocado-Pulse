@@ -61,7 +61,7 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to="/app" replace /> : <LandingPage />} />
+      <Route path="/" element={user ? <Navigate to="/app" replace /> : <DynamicLandingPage />} />
       <Route path="/p/:slug" element={<DynamicLandingPage />} />
       <Route path="/login" element={<LoginView initialIsLogin={true} />} />
       <Route path="/signup" element={<LoginView initialIsLogin={false} />} />

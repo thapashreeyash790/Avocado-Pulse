@@ -67,6 +67,14 @@ const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate }) 
                 </nav>
             )}
 
+            {page.sections.length === 0 && isEditing && (
+                <div className="flex flex-col items-center justify-center py-32 text-gray-400 border-2 border-dashed border-gray-200 m-8 rounded-xl bg-gray-50/50">
+                    <div className="text-4xl mb-4">📄</div>
+                    <h3 className="text-xl font-bold text-gray-600">This page is empty</h3>
+                    <p>Add a section from the sidebar to get started.</p>
+                </div>
+            )}
+
             {page.sections.sort((a, b) => a.order - b.order).map(section => (
                 <div key={section.id} className="relative group">
                     <SectionRenderer
