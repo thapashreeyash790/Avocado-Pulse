@@ -32,6 +32,7 @@ const ManagementView: React.FC = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [showFieldModal, setShowFieldModal] = useState(false);
 
@@ -270,7 +271,11 @@ const ManagementView: React.FC = () => {
 
       {showClientModal && <ClientModal onClose={() => setShowClientModal(false)} onSave={addClient} />}
       {showProjectModal && <ProjectModal clients={clients} onClose={() => setShowProjectModal(false)} onSave={addProject} />}
-      {showInviteModal && <InviteModal onClose={() => setShowInviteModal(false)} onSave={inviteTeamMember} />}
+      {showInviteModal && <InviteModal onClose={() => setShowInviteModal(false)} onSave={async (n: string, e: string, r: string, p: any) => {
+        const link = await inviteTeamMember(n, e, r, p);
+        if (link) setInviteLink(link);
+      }} />}
+      {inviteLink && <InviteLinkModal link={inviteLink} onClose={() => setInviteLink(null)} />}
       {editingUser && <ProfileEditModal user={editingUser} currentUser={user} onClose={() => setEditingUser(null)} onSave={updateUser} onRequestEmailUpdate={requestEmailUpdate} onConfirmEmailUpdate={confirmEmailUpdate} />}
       {showFieldModal && (
         <CustomFieldForm
@@ -402,5 +407,29 @@ const ProfileEditModal = ({ user, currentUser, onClose, onSave, onRequestEmailUp
     </div>
   );
 }
+
+const InviteLinkModal = ({ link, onClose }: any) => {
+  const copy = () => {
+    navigator.clipboard.writeText(link);
+    alert('Copied to clipboard!');
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
+      <div className="relative bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl animate-in zoom-in-95">
+        <h3 className="text-xl font-black mb-4 text-black">Invitation Link</h3>
+        <p className="text-sm text-gray-500 mb-4">Email delivery failed. Please copy this link and send it manually.</p>
+        <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl mb-6 break-all text-xs font-mono text-gray-600">
+          {link}
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm">Close</button>
+          <button onClick={copy} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl font-bold text-sm">Copy Link</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default ManagementView;

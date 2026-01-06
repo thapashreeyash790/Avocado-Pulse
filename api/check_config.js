@@ -10,6 +10,12 @@ async function check() {
     console.log('SMTP_PASS:', process.env.SMTP_PASS ? 'Exists' : 'MISSING');
     console.log('PORT:', process.env.PORT || '4000 (default)');
 
+    if (!process.env.APP_URL) {
+        console.warn('⚠️  APP_URL is not set. Defaulting to http://localhost:3010 (or 5173) for invites.');
+    } else {
+        console.log('✅ APP_URL is set:', process.env.APP_URL);
+    }
+
 
     if (!process.env.SMTP_HOST) {
         console.log('\n❌ Mail will NOT work. It will default to simulation mode.');

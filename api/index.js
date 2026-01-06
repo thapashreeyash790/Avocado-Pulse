@@ -441,14 +441,25 @@ app.post('/api/team/invite', async (req, res) => {
     payload: { name, role, id: userId, permissions }
   });
 
-  const inviteLink = `http://localhost:3010/?invite=true&email=${lowerEmail}&token=${verifyToken}&role=${encodeURIComponent(role)}`;
+  const baseUrl = process.env.APP_URL || 'http://localhost:3010';
+  const inviteLink = `${baseUrl}/?invite=true&email=${lowerEmail}&token=${verifyToken}&role=${encodeURIComponent(role)}`;
 
-  await sendMail(lowerEmail, 'Invitation to join Avocado PM',
-    `Welcome ${name}! Register here: ${inviteLink}`,
-    `<h2>Join the Team</h2><p>Click <a href="${inviteLink}">here</a> to join as ${role}.</p>`
-  );
+  let emailSent = false;
+  try {
+    await sendMail(lowerEmail, 'Invitation to join Avocado PM',
+      `Welcome ${name}! Register here: ${inviteLink}`,
+      `<h2>Join the Team</h2><p>Click <a href="${inviteLink}">here</a> to join as ${role}.</p>`
+    );
+    emailSent = true;
+  } catch (err) {
+    console.error('[Invite Error] Failed to send email:', err.message);
+  }
 
-  res.status(201).json({ success: true, message: 'Invite sent' });
+  res.status(201).json({
+    success: true,
+    message: emailSent ? 'Invite sent' : 'Invite created but email failed',
+    inviteLink: emailSent ? undefined : inviteLink
+  });
 });
 
 app.post('/api/auth/verify', async (req, res) => {
