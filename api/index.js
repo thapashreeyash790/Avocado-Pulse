@@ -186,7 +186,6 @@ const ticketSchema = new mongoose.Schema({
   status: { type: String, enum: ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'], default: 'OPEN' },
   priority: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'], default: 'MEDIUM' },
   assignedTo: String,
-  assignedTo: String,
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
@@ -208,10 +207,22 @@ const cmsPageSchema = new mongoose.Schema({
   status: { type: String, enum: ['DRAFT', 'PUBLISHED'], default: 'DRAFT' },
   sections: [{
     id: String,
-    type: { type: String, enum: ['HERO', 'NARRATIVE', 'PRICING', 'FAQ', 'TESTIMONIALS', 'FEATURES'] },
+    type: { type: String },
     content: mongoose.Schema.Types.Mixed,
-    order: Number
+    order: Number,
+    advanced: mongoose.Schema.Types.Mixed
   }],
+  settings: mongoose.Schema.Types.Mixed,
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const templateSchema = new mongoose.Schema({
+  id: { type: String, unique: true, required: true },
+  name: String,
+  type: { type: String },
+  data: mongoose.Schema.Types.Mixed,
+  previewImage: String,
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -229,6 +240,7 @@ const Estimate = mongoose.model('Estimate', estimateSchema);
 const Ticket = mongoose.model('Ticket', ticketSchema);
 const Announcement = mongoose.model('Announcement', announcementSchema);
 const Page = mongoose.model('Page', cmsPageSchema);
+const Template = mongoose.model('Template', templateSchema);
 
 const TimeEntry = mongoose.model('TimeEntry', new mongoose.Schema({
   id: { type: String, unique: true },
@@ -306,7 +318,8 @@ const getModel = (resource) => {
     announcements: Announcement,
     settings: Settings,
     timeEntry: TimeEntry,
-    pages: Page
+    pages: Page,
+    templates: Template
   };
   return models[resource];
 };
@@ -611,7 +624,7 @@ app.get('/api/:resource', async (req, res) => {
           // This enables chat discovery for everyone (Admin, Team, Clients)
           const allUsers = await User.find({}).sort({ name: 1 });
 
-          if (perms.management === true || isAdmin) {
+          if (perms.management === true || requesterRole === 'ADMIN') {
             return res.json(allUsers);
           }
 

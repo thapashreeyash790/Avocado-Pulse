@@ -37,7 +37,19 @@ import {
   Video,
   Menu,
   Type,
-  Eye
+  Eye,
+  MousePointer2,
+  Image,
+  Youtube,
+  Palette,
+  Move,
+  Mail,
+  BarChart,
+  Grid,
+  Phone,
+  Link,
+  Upload,
+  Award
 } from 'lucide-react';
 
 export const ICONS = {
@@ -77,7 +89,19 @@ export const ICONS = {
   Video,
   Menu,
   Type,
-  Eye
+  Eye,
+  MousePointer2,
+  Image,
+  Youtube,
+  Palette,
+  Move,
+  Mail,
+  BarChart,
+  Grid,
+  Phone,
+  Link,
+  Upload,
+  Award
 };
 
 export const PRIORITY_COLORS = {

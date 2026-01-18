@@ -307,9 +307,16 @@ export interface WorkspaceSettings {
 }
 export interface CMSSection {
   id: string;
-  type: 'HERO' | 'NARRATIVE' | 'PRICING' | 'FAQ' | 'TESTIMONIALS' | 'FEATURES';
+  type: 'HERO' | 'NARRATIVE' | 'PRICING' | 'FAQ' | 'TESTIMONIALS' | 'FEATURES' | 'CTA' | 'IMAGE' | 'VIDEO' | 'TEAM' | 'STATS' | 'GALLERY' | 'CONTACT' | 'NEWSLETTER' | 'LOGO_CLOUD';
   content: any;
   order: number;
+  advanced?: {
+    customCSS?: string;
+    animation?: 'none' | 'fadeIn' | 'slideUp' | 'slideDown' | 'zoomIn';
+    zIndex?: number;
+    margin?: { top: number; bottom: number; left: number; right: number };
+    padding?: { top: number; bottom: number; left: number; right: number };
+  };
 }
 
 export interface CMSPage {
@@ -318,6 +325,28 @@ export interface CMSPage {
   title: string;
   status: 'DRAFT' | 'PUBLISHED';
   sections: CMSSection[];
+  settings?: {
+    globalColors?: {
+      primary: string;
+      secondary: string;
+      accent: string;
+      background: string;
+      text: string;
+    };
+    globalFonts?: {
+      heading: string;
+      body: string;
+    };
+  };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CMSTemplate {
+  id: string;
+  name: string;
+  type: 'SECTION' | 'PAGE';
+  data: CMSSection | CMSSection[];
+  previewImage?: string;
+  createdAt: string;
 }

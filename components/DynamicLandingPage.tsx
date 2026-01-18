@@ -4,6 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../store/AppContext';
 import { CMSPage, CMSSection } from '../types';
 import { ICONS } from '../constants';
+import ImagePicker from './ImagePicker';
 import '../components/LandingPage.css';
 
 interface Props {
@@ -16,8 +17,44 @@ interface Props {
 
 const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate, onSelectSection, activeSectionId }) => {
     const { slug } = useParams<{ slug: string }>();
-    const { cmsPages, fetchCMSPages } = useApp();
+    const { cmsPages, fetchCMSPages, isLoading } = useApp();
     const [page, setPage] = useState<CMSPage | null>(null);
+    const [visibleSections, setVisibleSections] = useState<Record<string, boolean>>({});
+
+    useEffect(() => {
+        if (isEditing) {
+            // In editing mode, we want to show everything. 
+            // We use a timeout to ensure all sections are rendered before marking them visible.
+            const timeout = setTimeout(() => {
+                const allVisible: Record<string, boolean> = {};
+                page?.sections.forEach(s => { allVisible[`section - ${s.id} `] = true; });
+                setVisibleSections(allVisible);
+            }, 100);
+            return () => clearTimeout(timeout);
+        }
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        setVisibleSections(prev => ({ ...prev, [entry.target.id]: true }));
+                    }
+                });
+            },
+            { threshold: 0.1 }
+        );
+
+        // We need a small delay to let sections mount before observing
+        const timeout = setTimeout(() => {
+            const currentSections = document.querySelectorAll('.cms-section');
+            currentSections.forEach(s => observer.observe(s));
+        }, 500);
+
+        return () => {
+            clearTimeout(timeout);
+            observer.disconnect();
+        };
+    }, [page?.sections.length, isEditing, page?.sections]); // Added page.sections to dependency to catch internal updates
 
     useEffect(() => {
         if (pageData) {
@@ -102,7 +139,12 @@ const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate, on
     };
 
     if (!page) {
-        if (isEditing) return <div className="p-10 text-center text-gray-500">Initializing Editor...</div>;
+        if (isEditing || isLoading) return (
+            <div className="flex flex-col items-center justify-center min-h-screen py-20 bg-gray-50">
+                <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="text-gray-500 font-medium">Loading landing page...</p>
+            </div>
+        );
         return (
             <div className="flex flex-col items-center justify-center min-h-screen py-20 bg-gray-50">
                 <h1 className="text-4xl font-bold text-gray-800">Page Not Found</h1>
@@ -113,7 +155,27 @@ const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate, on
     }
 
     return (
-        <div className={`landing-container ${isEditing ? 'visual-editor-mode' : ''}`}>
+        <div className={`landing - container ${isEditing ? 'visual-editor-mode' : ''} `}>
+            {/* Google Fonts Loader */}
+            {(page.settings?.globalFonts?.heading || page.settings?.globalFonts?.body) && (
+                <link
+                    rel="stylesheet"
+                    href={`https://fonts.googleapis.com/css2?family=${[
+                        page.settings.globalFonts.heading,
+                        page.settings.globalFonts.body
+                    ].filter(Boolean).map(f => f!.replace(/\s+/g, '+')).join('&family=')}& display=swap`}
+                />
+            )}
+
+            {/* Inject Global & Custom Styles */}
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                ${page.settings?.globalFonts?.heading ? `h1, h2, h3, h4, h5, h6 { font-family: "${page.settings.globalFonts.heading}", sans-serif !important; }` : ''}
+                ${page.settings?.globalFonts?.body ? `body, p, span, li, a { font-family: "${page.settings.globalFonts.body}", sans-serif !important; }` : ''}
+                ${page.settings?.globalColors?.primary ? `:root { --primary-green: ${page.settings.globalColors.primary} !important; --primary-green-hover: ${page.settings.globalColors.primary}dd !important; }` : ''}
+                ${page.sections.map(s => s.advanced?.customCSS ? s.advanced.customCSS.replace(/selector/g, `#section-${s.id}`) : '').join('\n')}
+`}} />
+
             {!isEditing && (
                 <nav className="fixed top-0 w-full z-50 border-b border-white/20 bg-white/80 backdrop-blur-xl shadow-sm transition-all duration-300 supports-[backdrop-filter]:bg-white/60">
                     <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
@@ -159,7 +221,6 @@ const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate, on
                         if (!isEditing) return;
                         e.dataTransfer.setData('text/plain', index.toString());
                         e.dataTransfer.effectAllowed = 'move';
-                        // Add a transparent styling or class if desired
                         e.currentTarget.style.opacity = '0.5';
                     }}
                     onDragEnd={(e) => {
@@ -168,36 +229,63 @@ const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate, on
                     }}
                     onDragOver={(e) => {
                         if (!isEditing) return;
-                        e.preventDefault(); // Necessary to allow dropping
+                        e.preventDefault();
                         e.dataTransfer.dropEffect = 'move';
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const midpoint = rect.top + rect.height / 2;
+                        e.currentTarget.classList.remove('border-t-8', 'border-b-8', 'border-blue-500');
+                        if (e.clientY < midpoint) {
+                            e.currentTarget.classList.add('border-t-8', 'border-blue-500');
+                            e.currentTarget.setAttribute('data-drop-pos', 'before');
+                        } else {
+                            e.currentTarget.classList.add('border-b-8', 'border-blue-500');
+                            e.currentTarget.setAttribute('data-drop-pos', 'after');
+                        }
+                    }}
+                    onDragLeave={(e) => {
+                        if (!isEditing) return;
+                        e.currentTarget.classList.remove('border-t-8', 'border-b-8', 'border-blue-500');
                     }}
                     onDrop={(e) => {
                         if (!isEditing || !onUpdate) return;
                         e.preventDefault();
+                        const dropPos = e.currentTarget.getAttribute('data-drop-pos');
+                        e.currentTarget.classList.remove('border-t-8', 'border-b-8', 'border-blue-500');
                         const sourceIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
-                        if (isNaN(sourceIndex) || sourceIndex === index) return;
-
+                        if (isNaN(sourceIndex)) return;
+                        let targetIndex = index;
+                        if (dropPos === 'after') targetIndex = index + 1;
+                        if (sourceIndex === targetIndex || sourceIndex === targetIndex - 1) return;
                         const newSections = Array.from(page.sections);
                         const [movedSection] = newSections.splice(sourceIndex, 1);
-                        newSections.splice(index, 0, movedSection);
-
-                        // Re-assign order based on new index
+                        let adjustedTarget = targetIndex;
+                        if (sourceIndex < targetIndex) adjustedTarget = targetIndex - 1;
+                        newSections.splice(adjustedTarget, 0, movedSection);
                         const reorderedSections = newSections.map((s: CMSSection, i: number) => ({ ...s, order: i + 1 }));
-
                         const updatedPage = { ...page, sections: reorderedSections };
                         setPage(updatedPage);
                         onUpdate(updatedPage);
                     }}
-                    className={`relative group transition-all ${isEditing ? 'cursor-move hover:ring-2 hover:ring-blue-400/50' : ''} ${activeSectionId === section.id ? 'ring-2 ring-blue-500 z-10' : ''}`}
+                    className={`cms - section relative group transition - all ${isEditing ? 'cursor-move hover:ring-2 hover:ring-blue-400/50' : ''} ${activeSectionId === section.id ? 'ring-2 ring-blue-500 z-10' : ''} ${section.advanced?.animation && visibleSections[`section-${section.id}`] ? `animate-${section.advanced.animation}` : (section.advanced?.animation ? 'opacity-0' : '')} `}
                     onClick={(e) => {
                         if (isEditing && onSelectSection) {
                             e.stopPropagation();
                             onSelectSection(section.id);
                         }
                     }}
+                    id={`section - ${section.id} `}
                     style={{
                         backgroundColor: section.content.bgColor,
-                        color: section.content.textColor
+                        color: section.content.textColor,
+                        zIndex: section.advanced?.zIndex || 'auto',
+                        paddingTop: section.advanced?.padding?.top ? `${section.advanced.padding.top} px` : (section.content.paddingTop ? `${section.content.paddingTop} px` : undefined),
+                        paddingBottom: section.advanced?.padding?.bottom ? `${section.advanced.padding.bottom} px` : (section.content.paddingBottom ? `${section.content.paddingBottom} px` : undefined),
+                        paddingLeft: section.advanced?.padding?.left ? `${section.advanced.padding.left} px` : undefined,
+                        paddingRight: section.advanced?.padding?.right ? `${section.advanced.padding.right} px` : undefined,
+                        marginTop: section.advanced?.margin?.top ? `${section.advanced.margin.top} px` : undefined,
+                        marginBottom: section.advanced?.margin?.bottom ? `${section.advanced.margin.bottom} px` : undefined,
+                        marginLeft: section.advanced?.margin?.left ? `${section.advanced.margin.left} px` : undefined,
+                        marginRight: section.advanced?.margin?.right ? `${section.advanced.margin.right} px` : undefined,
                     }}
                 >
                     <SectionRenderer
@@ -206,7 +294,7 @@ const DynamicLandingPage: React.FC<Props> = ({ isEditing, pageData, onUpdate, on
                         onUpdate={(content) => handleSectionUpdate(section.id, content)}
                     />
                     {isEditing && (
-                        <div className={`absolute top-0 left-1/2 -translate-x-1/2 -mt-5 transition-all z-50 flex gap-1 ${activeSectionId === section.id || 'group-hover:opacity-100 opacity-0'}`}>
+                        <div className={`absolute top - 0 left - 1 / 2 - translate - x - 1 / 2 - mt - 5 transition - all z - 50 flex gap - 1 ${activeSectionId === section.id || 'group-hover:opacity-100 opacity-0'} `}>
                             <div className="bg-blue-600 text-white text-xs rounded-t-lg shadow-lg font-bold flex items-center overflow-hidden">
                                 <div title="Drag to reorder" className="px-2 py-1.5 cursor-move hover:bg-blue-700 flex items-center border-r border-blue-500">
                                     <span className="text-sm">⋮⋮</span>
@@ -259,7 +347,7 @@ const EditableText: React.FC<{
 
     return (
         <Tag
-            className={`${className} outline-none border border-transparent hover:border-blue-300 focus:border-blue-500 rounded px-1 transition-all cursor-text`}
+            className={`${className} outline - none border border - transparent hover: border - blue - 300 focus: border - blue - 500 rounded px - 1 transition - all cursor - text`}
             contentEditable
             suppressContentEditableWarning
             onBlur={(e: any) => onChange(e.currentTarget.innerText)}
@@ -275,20 +363,35 @@ const EditableImage: React.FC<{
     isEditing?: boolean;
     onChange: (val: string) => void;
 }> = ({ src, className, alt, isEditing, onChange }) => {
+    const [showPicker, setShowPicker] = useState(false);
+
     const handleEdit = () => {
-        const url = prompt('Enter new image URL:', src);
-        if (url !== null) onChange(url);
+        setShowPicker(true);
+    };
+
+    const handleSelect = (url: string) => {
+        onChange(url);
+        setShowPicker(false);
     };
 
     return (
-        <div className={`relative group ${className} ${isEditing ? 'cursor-pointer' : ''}`} onClick={isEditing ? handleEdit : undefined}>
-            <img src={src || 'https://via.placeholder.com/800x600?text=No+Image'} alt={alt} className="w-full h-full object-cover" />
-            {isEditing && (
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-white font-bold bg-black/50 px-3 py-1 rounded-full border border-white/50">Change Image</span>
-                </div>
+        <>
+            <div className={`relative group ${className} ${isEditing ? 'cursor-pointer' : ''}`} onClick={isEditing ? handleEdit : undefined}>
+                <img src={src || 'https://via.placeholder.com/800x600?text=No+Image'} alt={alt} className="w-full h-full object-cover" />
+                {isEditing && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-white font-bold bg-black/50 px-3 py-1 rounded-full border border-white/50">Change Image</span>
+                    </div>
+                )}
+            </div>
+            {showPicker && (
+                <ImagePicker
+                    currentImage={src}
+                    onSelect={handleSelect}
+                    onClose={() => setShowPicker(false)}
+                />
             )}
-        </div>
+        </>
     );
 };
 
@@ -299,10 +402,8 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
         if (onUpdate) onUpdate({ ...section.content, [field]: value });
     };
 
-    const sectionStyle = {
-        paddingTop: section.content.paddingTop ? `${section.content.paddingTop}px` : undefined,
-        paddingBottom: section.content.paddingBottom ? `${section.content.paddingBottom}px` : undefined,
-    };
+    // Global settings will be applied via CSS variables or inherited from the wrapper div
+    const sectionStyle = {}; // Removed redundant padding application
 
     switch (section.type) {
         case 'HERO':
@@ -341,7 +442,7 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
                                 onChange={(val) => updateField('subtitle', val)}
                             />
                         </div>
-                        <Link to="/signup" className="cta-button primary px-10 py-5 bg-green-600 text-white rounded-xl text-xl font-bold inline-block">
+                        <Link to="/signup" className="cta-button primary px-10 py-5 text-white rounded-xl text-xl font-bold inline-block" style={{ backgroundColor: 'var(--primary-green)' }}>
                             <EditableText
                                 tagName="span"
                                 text={section.content.cta || 'Start'}
@@ -358,7 +459,44 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
                     <div className="max-w-7xl mx-auto px-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
                             {section.content.items?.map((item: any, idx: number) => (
-                                <div key={idx} className="feature-card p-8 rounded-3xl bg-gray-50 border border-gray-100 flex flex-col">
+                                <div
+                                    key={idx}
+                                    draggable={isEditing}
+                                    onDragStart={(e) => {
+                                        if (!isEditing) return;
+                                        e.stopPropagation();
+                                        e.dataTransfer.setData('subIndex', idx.toString());
+                                        e.currentTarget.style.opacity = '0.5';
+                                    }}
+                                    onDragEnd={(e) => {
+                                        if (!isEditing) return;
+                                        e.currentTarget.style.opacity = '1';
+                                    }}
+                                    onDragOver={(e) => {
+                                        if (!isEditing) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        e.currentTarget.classList.add('ring-2', 'ring-blue-400', 'ring-inset');
+                                    }}
+                                    onDragLeave={(e) => {
+                                        if (!isEditing) return;
+                                        e.currentTarget.classList.remove('ring-2', 'ring-blue-400', 'ring-inset');
+                                    }}
+                                    onDrop={(e) => {
+                                        if (!isEditing) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        e.currentTarget.classList.remove('ring-2', 'ring-blue-400', 'ring-inset');
+                                        const sourceIdx = parseInt(e.dataTransfer.getData('subIndex'));
+                                        if (!isNaN(sourceIdx) && sourceIdx !== idx) {
+                                            const newItems = [...section.content.items];
+                                            const [moved] = newItems.splice(sourceIdx, 1);
+                                            newItems.splice(idx, 0, moved);
+                                            updateField('items', newItems);
+                                        }
+                                    }}
+                                    className="feature-card p-8 rounded-3xl bg-gray-50 border border-gray-100 flex flex-col relative group/card"
+                                >
                                     <div className="w-16 h-16 mb-6 rounded-2xl overflow-hidden bg-gray-200">
                                         <EditableImage
                                             src={item.image}
@@ -406,7 +544,44 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
                         <h2 className="text-4xl font-bold mb-12">Simple, Transparent Pricing</h2>
                         <div className="flex flex-wrap justify-center gap-8">
                             {section.content.plans?.map((plan: any, idx: number) => (
-                                <div key={idx} className="pricing-card p-10 rounded-3xl bg-white shadow-xl border border-gray-100 w-80">
+                                <div
+                                    key={idx}
+                                    draggable={isEditing}
+                                    onDragStart={(e) => {
+                                        if (!isEditing) return;
+                                        e.stopPropagation();
+                                        e.dataTransfer.setData('planIndex', idx.toString());
+                                        e.currentTarget.style.opacity = '0.5';
+                                    }}
+                                    onDragEnd={(e) => {
+                                        if (!isEditing) return;
+                                        e.currentTarget.style.opacity = '1';
+                                    }}
+                                    onDragOver={(e) => {
+                                        if (!isEditing) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        e.currentTarget.classList.add('ring-2', 'ring-blue-400');
+                                    }}
+                                    onDragLeave={(e) => {
+                                        if (!isEditing) return;
+                                        e.currentTarget.classList.remove('ring-2', 'ring-blue-400');
+                                    }}
+                                    onDrop={(e) => {
+                                        if (!isEditing) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        e.currentTarget.classList.remove('ring-2', 'ring-blue-400');
+                                        const sourceIdx = parseInt(e.dataTransfer.getData('planIndex'));
+                                        if (!isNaN(sourceIdx) && sourceIdx !== idx) {
+                                            const newPlans = [...section.content.plans];
+                                            const [moved] = newPlans.splice(sourceIdx, 1);
+                                            newPlans.splice(idx, 0, moved);
+                                            updateField('plans', newPlans);
+                                        }
+                                    }}
+                                    className="pricing-card p-10 rounded-3xl bg-white shadow-xl border border-gray-100 w-80 relative group/card"
+                                >
                                     <EditableText
                                         tagName="h3"
                                         className="text-2xl font-bold mb-2"
@@ -481,7 +656,44 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
                         <h2 className="text-3xl font-bold mb-12 text-center">Frequently Asked Questions</h2>
                         <div className="space-y-6">
                             {section.content.items?.map((item: any, idx: number) => (
-                                <div key={idx} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                                <div
+                                    key={idx}
+                                    draggable={isEditing}
+                                    onDragStart={(e) => {
+                                        if (!isEditing) return;
+                                        e.stopPropagation();
+                                        e.dataTransfer.setData('faqIndex', idx.toString());
+                                        e.currentTarget.style.opacity = '0.5';
+                                    }}
+                                    onDragEnd={(e) => {
+                                        if (!isEditing) return;
+                                        e.currentTarget.style.opacity = '1';
+                                    }}
+                                    onDragOver={(e) => {
+                                        if (!isEditing) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        e.currentTarget.classList.add('border-blue-400', 'bg-blue-50/50');
+                                    }}
+                                    onDragLeave={(e) => {
+                                        if (!isEditing) return;
+                                        e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50/50');
+                                    }}
+                                    onDrop={(e) => {
+                                        if (!isEditing) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50/50');
+                                        const sourceIdx = parseInt(e.dataTransfer.getData('faqIndex'));
+                                        if (!isNaN(sourceIdx) && sourceIdx !== idx) {
+                                            const newItems = [...section.content.items];
+                                            const [moved] = newItems.splice(sourceIdx, 1);
+                                            newItems.splice(idx, 0, moved);
+                                            updateField('items', newItems);
+                                        }
+                                    }}
+                                    className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm relative group/card transition-all"
+                                >
                                     <EditableText
                                         tagName="h4"
                                         className="text-lg font-bold mb-2 text-green-700"
@@ -517,7 +729,44 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
                         <h2 className="text-3xl font-bold mb-12 text-center">What People Say</h2>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                             {section.content.items?.map((item: any, idx: number) => (
-                                <div key={idx} className="bg-gray-50 p-8 rounded-3xl relative">
+                                <div
+                                    key={idx}
+                                    draggable={isEditing}
+                                    onDragStart={(e) => {
+                                        if (!isEditing) return;
+                                        e.stopPropagation();
+                                        e.dataTransfer.setData('testimonialIndex', idx.toString());
+                                        e.currentTarget.style.opacity = '0.5';
+                                    }}
+                                    onDragEnd={(e) => {
+                                        if (!isEditing) return;
+                                        e.currentTarget.style.opacity = '1';
+                                    }}
+                                    onDragOver={(e) => {
+                                        if (!isEditing) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        e.currentTarget.classList.add('ring-2', 'ring-blue-400');
+                                    }}
+                                    onDragLeave={(e) => {
+                                        if (!isEditing) return;
+                                        e.currentTarget.classList.remove('ring-2', 'ring-blue-400');
+                                    }}
+                                    onDrop={(e) => {
+                                        if (!isEditing) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        e.currentTarget.classList.remove('ring-2', 'ring-blue-400');
+                                        const sourceIdx = parseInt(e.dataTransfer.getData('testimonialIndex'));
+                                        if (!isNaN(sourceIdx) && sourceIdx !== idx) {
+                                            const newItems = [...section.content.items];
+                                            const [moved] = newItems.splice(sourceIdx, 1);
+                                            newItems.splice(idx, 0, moved);
+                                            updateField('items', newItems);
+                                        }
+                                    }}
+                                    className="bg-gray-50 p-8 rounded-3xl relative group/card transition-all"
+                                >
                                     <div className="text-4xl text-green-300 absolute top-4 left-6">"</div>
                                     <EditableText
                                         tagName="p"
@@ -554,6 +803,340 @@ const SectionRenderer: React.FC<{ section: CMSSection; isEditing?: boolean; onUp
                                             }}
                                         />
                                     </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            );
+        case 'CTA':
+            return (
+                <section className="py-20 px-6 text-white text-center rounded-3xl mx-8 my-12 shadow-2xl overflow-hidden relative" style={{ ...sectionStyle, backgroundColor: section.content.bgColor || '#4f46e5', color: section.content.textColor || '#ffffff' }}>
+                    <div className="max-w-4xl mx-auto relative z-10">
+                        <EditableText
+                            tagName="h2"
+                            className="text-4xl md:text-5xl font-black mb-8 leading-tight"
+                            text={section.content.title}
+                            isEditing={isEditing}
+                            onChange={(val) => updateField('title', val)}
+                        />
+                        <EditableText
+                            tagName="p"
+                            className="text-lg text-gray-100/80 mb-10 max-w-2xl mx-auto"
+                            text={section.content.subtitle}
+                            isEditing={isEditing}
+                            onChange={(val) => updateField('subtitle', val)}
+                        />
+                        <Link
+                            to="/signup"
+                            className="inline-block px-10 py-4 text-gray-900 font-black rounded-xl hover:scale-105 transition-all shadow-xl shadow-black/20"
+                            style={{ backgroundColor: 'var(--primary-green)' }}
+                        >
+                            <EditableText
+                                tagName="span"
+                                text={section.content.cta || 'Get Started Now'}
+                                isEditing={isEditing}
+                                onChange={(val) => updateField('cta', val)}
+                            />
+                        </Link>
+                    </div>
+                    {/* Background decoration */}
+                    <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
+                    <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
+                </section>
+            );
+        case 'IMAGE':
+            return (
+                <section className="py-12 px-6" style={sectionStyle}>
+                    <div className="max-w-7xl mx-auto rounded-3xl overflow-hidden shadow-2xl">
+                        <EditableImage
+                            src={section.content.image}
+                            isEditing={isEditing}
+                            onChange={(val) => updateField('image', val)}
+                            className="w-full aspect-video"
+                        />
+                    </div>
+                </section>
+            );
+        case 'VIDEO':
+            return (
+                <section className="py-12 px-6" style={sectionStyle}>
+                    <div className="max-w-5xl mx-auto aspect-video rounded-3xl overflow-hidden shadow-2xl bg-black">
+                        {isEditing ? (
+                            <div className="w-full h-full flex flex-col items-center justify-center text-white p-8 gap-4">
+                                <ICONS.Youtube size={64} className="text-red-500" />
+                                <div className="text-center">
+                                    <h3 className="text-xl font-bold mb-2">Video Widget</h3>
+                                    <p className="text-sm opacity-60 mb-4">Paste an embed URL below to update the video.</p>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter YouTube Embed URL..."
+                                        className="w-full max-w-md p-3 bg-white/10 border border-white/20 rounded-lg text-sm text-white focus:bg-white/20 transition-all outline-none"
+                                        value={section.content.videoUrl}
+                                        onChange={(e) => updateField('videoUrl', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <iframe
+                                src={section.content.videoUrl}
+                                className="w-full h-full border-0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                            ></iframe>
+                        )}
+                    </div>
+                </section>
+            );
+        case 'TEAM':
+            return (
+                <section className="py-24 bg-white" style={sectionStyle}>
+                    <div className="max-w-7xl mx-auto px-6">
+                        <EditableText
+                            tagName="h2"
+                            className="text-4xl font-bold mb-16 text-center"
+                            text={section.content.title}
+                            isEditing={isEditing}
+                            onChange={(val) => updateField('title', val)}
+                        />
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                            {section.content.members?.map((member: any, idx: number) => (
+                                <div key={idx} className="text-center group">
+                                    <div className="mb-4 relative overflow-hidden rounded-2xl aspect-square">
+                                        <EditableImage
+                                            src={member.image}
+                                            isEditing={isEditing}
+                                            onChange={(val) => {
+                                                const newMembers = [...section.content.members];
+                                                newMembers[idx] = { ...member, image: val };
+                                                updateField('members', newMembers);
+                                            }}
+                                            className="w-full h-full group-hover:scale-110 transition-transform duration-300"
+                                        />
+                                    </div>
+                                    <EditableText
+                                        tagName="h3"
+                                        className="text-xl font-bold mb-1"
+                                        text={member.name}
+                                        isEditing={isEditing}
+                                        onChange={(val) => {
+                                            const newMembers = [...section.content.members];
+                                            newMembers[idx] = { ...member, name: val };
+                                            updateField('members', newMembers);
+                                        }}
+                                    />
+                                    <EditableText
+                                        tagName="p"
+                                        className="text-green-600 font-semibold text-sm mb-2"
+                                        text={member.role}
+                                        isEditing={isEditing}
+                                        onChange={(val) => {
+                                            const newMembers = [...section.content.members];
+                                            newMembers[idx] = { ...member, role: val };
+                                            updateField('members', newMembers);
+                                        }}
+                                    />
+                                    <EditableText
+                                        tagName="p"
+                                        className="text-gray-600 text-sm"
+                                        text={member.bio}
+                                        isEditing={isEditing}
+                                        onChange={(val) => {
+                                            const newMembers = [...section.content.members];
+                                            newMembers[idx] = { ...member, bio: val };
+                                            updateField('members', newMembers);
+                                        }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            );
+        case 'STATS':
+            return (
+                <section className="py-24 bg-gradient-to-br from-green-600 to-emerald-700 text-white" style={sectionStyle}>
+                    <div className="max-w-7xl mx-auto px-6">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                            {section.content.items?.map((item: any, idx: number) => (
+                                <div key={idx} className="text-center">
+                                    <EditableText
+                                        tagName="div"
+                                        className="text-5xl md:text-6xl font-black mb-2"
+                                        text={item.value}
+                                        isEditing={isEditing}
+                                        onChange={(val) => {
+                                            const newItems = [...section.content.items];
+                                            newItems[idx] = { ...item, value: val };
+                                            updateField('items', newItems);
+                                        }}
+                                    />
+                                    <EditableText
+                                        tagName="p"
+                                        className="text-green-100 uppercase tracking-wide text-sm font-semibold"
+                                        text={item.label}
+                                        isEditing={isEditing}
+                                        onChange={(val) => {
+                                            const newItems = [...section.content.items];
+                                            newItems[idx] = { ...item, label: val };
+                                            updateField('items', newItems);
+                                        }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            );
+        case 'GALLERY':
+            return (
+                <section className="py-24 bg-gray-50" style={sectionStyle}>
+                    <div className="max-w-7xl mx-auto px-6">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {section.content.images?.map((img: string, idx: number) => (
+                                <div key={idx} className="aspect-square rounded-xl overflow-hidden group relative">
+                                    <EditableImage
+                                        src={img}
+                                        isEditing={isEditing}
+                                        onChange={(val) => {
+                                            const newImages = [...section.content.images];
+                                            newImages[idx] = val;
+                                            updateField('images', newImages);
+                                        }}
+                                        className="w-full h-full group-hover:scale-110 transition-transform duration-300"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            );
+        case 'CONTACT':
+            return (
+                <section className="py-24 bg-white" style={sectionStyle}>
+                    <div className="max-w-4xl mx-auto px-6">
+                        <EditableText
+                            tagName="h2"
+                            className="text-4xl font-bold mb-12 text-center"
+                            text={section.content.title}
+                            isEditing={isEditing}
+                            onChange={(val) => updateField('title', val)}
+                        />
+                        <div className="grid md:grid-cols-2 gap-12">
+                            <div className="space-y-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                                        <ICONS.Mail className="text-green-600" size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold mb-1">Email</h3>
+                                        <EditableText
+                                            tagName="p"
+                                            className="text-gray-600"
+                                            text={section.content.email}
+                                            isEditing={isEditing}
+                                            onChange={(val) => updateField('email', val)}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex items-start gap-4">
+                                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                                        <ICONS.Phone className="text-green-600" size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold mb-1">Phone</h3>
+                                        <EditableText
+                                            tagName="p"
+                                            className="text-gray-600"
+                                            text={section.content.phone}
+                                            isEditing={isEditing}
+                                            onChange={(val) => updateField('phone', val)}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex items-start gap-4">
+                                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                                        <ICONS.Home className="text-green-600" size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold mb-1">Address</h3>
+                                        <EditableText
+                                            tagName="p"
+                                            className="text-gray-600"
+                                            text={section.content.address}
+                                            isEditing={isEditing}
+                                            onChange={(val) => updateField('address', val)}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-gray-50 p-8 rounded-2xl">
+                                <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+                                    <input type="text" placeholder="Your Name" className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                                    <input type="email" placeholder="Your Email" className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                                    <textarea placeholder="Your Message" rows={4} className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"></textarea>
+                                    <button type="submit" className="w-full py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-colors">Send Message</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            );
+        case 'NEWSLETTER':
+            return (
+                <section className="py-24 bg-gradient-to-r from-green-600 to-emerald-600 text-white" style={sectionStyle}>
+                    <div className="max-w-3xl mx-auto px-6 text-center">
+                        <EditableText
+                            tagName="h2"
+                            className="text-4xl font-bold mb-4"
+                            text={section.content.title}
+                            isEditing={isEditing}
+                            onChange={(val) => updateField('title', val)}
+                        />
+                        <EditableText
+                            tagName="p"
+                            className="text-green-100 mb-8 text-lg"
+                            text={section.content.subtitle}
+                            isEditing={isEditing}
+                            onChange={(val) => updateField('subtitle', val)}
+                        />
+                        <form className="flex gap-3 max-w-md mx-auto" onSubmit={(e) => e.preventDefault()}>
+                            <input
+                                type="email"
+                                placeholder={section.content.placeholder || 'Enter your email'}
+                                className="flex-1 px-4 py-3 rounded-lg text-gray-900 focus:ring-2 focus:ring-white focus:outline-none"
+                            />
+                            <button type="submit" className="px-6 py-3 bg-white text-green-600 rounded-lg font-bold hover:bg-gray-100 transition-colors">
+                                {section.content.cta || 'Subscribe'}
+                            </button>
+                        </form>
+                    </div>
+                </section>
+            );
+        case 'LOGO_CLOUD':
+            return (
+                <section className="py-24 bg-white" style={sectionStyle}>
+                    <div className="max-w-7xl mx-auto px-6">
+                        <EditableText
+                            tagName="h2"
+                            className="text-2xl font-bold mb-12 text-center text-gray-500"
+                            text={section.content.title}
+                            isEditing={isEditing}
+                            onChange={(val) => updateField('title', val)}
+                        />
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8 items-center">
+                            {section.content.logos?.map((logo: string, idx: number) => (
+                                <div key={idx} className="flex items-center justify-center p-4 grayscale hover:grayscale-0 transition-all opacity-60 hover:opacity-100">
+                                    <EditableImage
+                                        src={logo}
+                                        isEditing={isEditing}
+                                        onChange={(val) => {
+                                            const newLogos = [...section.content.logos];
+                                            newLogos[idx] = val;
+                                            updateField('logos', newLogos);
+                                        }}
+                                        className="max-h-12 w-auto"
+                                    />
                                 </div>
                             ))}
                         </div>

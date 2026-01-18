@@ -2,13 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store/AppContext';
-import { CMSPage, CMSSection } from '../types';
+import { CMSPage, CMSSection, CMSTemplate } from '../types';
 import { ICONS } from '../constants';
 import '../components/LandingPage.css'; // Reuse some landing page styles
 import DynamicLandingPage from './DynamicLandingPage';
 
 const CMSDashboard: React.FC = () => {
-    const { cmsPages, saveCMSPage, deleteCMSPage, fetchCMSPages } = useApp();
+    const { cmsPages, saveCMSPage, deleteCMSPage, fetchCMSPages, cmsTemplates, saveCMSTemplate, deleteCMSTemplate } = useApp();
     const [editingPage, setEditingPage] = useState<Partial<CMSPage> | null>(null);
     // History State
     const [history, setHistory] = useState<Partial<CMSPage>[]>([]);
@@ -132,6 +132,15 @@ const CMSDashboard: React.FC = () => {
             case 'FAQ': return { items: [{ question: 'What is it?', answer: 'It is Avocado Pulse.' }] };
             case 'TESTIMONIALS': return { items: [{ author: 'John Doe', text: 'Great tool!', role: 'CEO' }] };
             case 'FEATURES': return { items: [{ title: 'Feature 1', description: 'Does stuff' }] };
+            case 'CTA': return { title: 'Ready to join?', cta: 'Get Started', bgColor: '#4f46e5', textColor: '#ffffff' };
+            case 'IMAGE': return { image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80' };
+            case 'VIDEO': return { videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' };
+            case 'TEAM': return { title: 'Meet Our Team', members: [{ name: 'John Doe', role: 'CEO', image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=john', bio: 'Leading with vision' }] };
+            case 'STATS': return { items: [{ label: 'Happy Clients', value: '500+', icon: 'users' }, { label: 'Projects Done', value: '1000+', icon: 'check' }] };
+            case 'GALLERY': return { images: ['https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=400&q=80'] };
+            case 'CONTACT': return { title: 'Get In Touch', email: 'hello@example.com', phone: '+1 234 567 8900', address: '123 Main St, City' };
+            case 'NEWSLETTER': return { title: 'Subscribe to our newsletter', subtitle: 'Get the latest updates', placeholder: 'Enter your email', cta: 'Subscribe' };
+            case 'LOGO_CLOUD': return { title: 'Trusted by leading companies', logos: ['https://via.placeholder.com/150x50?text=Logo+1'] };
             default: return {};
         }
     };
@@ -159,14 +168,44 @@ const CMSDashboard: React.FC = () => {
             } else if (direction === 'down' && idx < newSections.length - 1) {
                 [newSections[idx], newSections[idx + 1]] = [newSections[idx + 1], newSections[idx]];
             }
-            return { ...prev, sections: newSections };
+            return { ...prev, sections: newSections.map((s, i) => ({ ...s, order: i + 1 })) };
         });
     };
 
-    const updateSection = (id: string, updates: any) => {
+    const reorderSections = (sourceIndex: number, destinationIndex: number) => {
         setEditingPage(prev => {
             if (!prev || !prev.sections) return prev;
-            const newSections = prev.sections.map(s => s.id === id ? { ...s, content: { ...s.content, ...updates } } : s);
+            const newSections = Array.from(prev.sections);
+            const [movedSection] = newSections.splice(sourceIndex, 1);
+
+            // Adjust destination if it was after the source
+            let actualDest = destinationIndex;
+            if (sourceIndex < destinationIndex) {
+                actualDest = destinationIndex - 1;
+            }
+
+            newSections.splice(actualDest, 0, movedSection);
+            return {
+                ...prev,
+                sections: newSections.map((s: CMSSection, i: number) => ({ ...s, order: i + 1 }))
+            };
+        });
+    };
+
+    const updateSection = (id: string, updates: Partial<CMSSection>) => {
+        setEditingPage(prev => {
+            if (!prev || !prev.sections) return prev;
+            const newSections = prev.sections.map(s => {
+                if (s.id === id) {
+                    const { content, ...otherUpdates } = updates;
+                    return {
+                        ...s,
+                        ...otherUpdates,
+                        content: content ? { ...(s.content as object || {}), ...content } : s.content
+                    };
+                }
+                return s;
+            });
             return { ...prev, sections: newSections };
         });
     };
@@ -184,6 +223,7 @@ const CMSDashboard: React.FC = () => {
                     setActiveSectionId={setActiveSectionId}
                     addSection={addSection}
                     moveSection={moveSection}
+                    reorderSections={reorderSections}
                     removeSection={removeSection}
                     updateSection={updateSection}
                     handleSave={handleSave}
@@ -194,6 +234,9 @@ const CMSDashboard: React.FC = () => {
                     redo={redo}
                     canUndo={historyIndex > 0}
                     canRedo={historyIndex < history.length - 1}
+                    cmsTemplates={cmsTemplates}
+                    saveCMSTemplate={saveCMSTemplate}
+                    deleteCMSTemplate={deleteCMSTemplate}
                 />
 
                 {/* Canvas Area */}
@@ -273,6 +316,7 @@ const ElementorSidebar: React.FC<{
     setActiveSectionId: (id: string | null) => void;
     addSection: (type: CMSSection['type']) => void;
     moveSection: (id: string, dir: 'up' | 'down') => void;
+    reorderSections: (source: number, dest: number) => void;
     removeSection: (id: string) => void;
     updateSection: (id: string, updates: any) => void;
     handleSave: () => void;
@@ -283,11 +327,14 @@ const ElementorSidebar: React.FC<{
     redo: () => void;
     canUndo: boolean;
     canRedo: boolean;
-}> = ({ editingPage, setEditingPage, activeSection, setActiveSectionId, addSection, moveSection, removeSection, updateSection, handleSave, viewMode, setViewMode, onExit, undo, redo, canUndo, canRedo }) => {
+    cmsTemplates: CMSTemplate[];
+    saveCMSTemplate: (tpl: Partial<CMSTemplate>) => Promise<void>;
+    deleteCMSTemplate: (id: string) => Promise<void>;
+}> = ({ editingPage, setEditingPage, activeSection, setActiveSectionId, addSection, moveSection, reorderSections, removeSection, updateSection, handleSave, viewMode, setViewMode, onExit, undo, redo, canUndo, canRedo, cmsTemplates, saveCMSTemplate, deleteCMSTemplate }) => {
 
     // Internal state for sidebar view
-    const [sidebarMode, setSidebarMode] = useState<'WIDGETS' | 'PROPERTIES' | 'SETTINGS' | 'NAVIGATOR'>('WIDGETS');
-    const [sidebarTab, setSidebarTab] = useState<'content' | 'style'>('content');
+    const [sidebarMode, setSidebarMode] = useState<'WIDGETS' | 'PROPERTIES' | 'SETTINGS' | 'NAVIGATOR' | 'TEMPLATES'>('WIDGETS');
+    const [sidebarTab, setSidebarTab] = useState<'content' | 'style' | 'advanced'>('content');
 
     // Auto-switch to properties when section is selected
     useEffect(() => {
@@ -314,6 +361,15 @@ const ElementorSidebar: React.FC<{
         { type: 'NARRATIVE', label: 'Text', icon: ICONS.FileText },
         { type: 'FAQ', label: 'FAQ', icon: ICONS.MessageSquare },
         { type: 'TESTIMONIALS', label: 'Reviews', icon: ICONS.Users },
+        { type: 'CTA', label: 'Banner', icon: ICONS.MousePointer2 },
+        { type: 'IMAGE', label: 'Image', icon: ICONS.Image },
+        { type: 'VIDEO', label: 'Video', icon: ICONS.Youtube },
+        { type: 'TEAM', label: 'Team', icon: ICONS.Award },
+        { type: 'STATS', label: 'Stats', icon: ICONS.BarChart },
+        { type: 'GALLERY', label: 'Gallery', icon: ICONS.Grid },
+        { type: 'CONTACT', label: 'Contact', icon: ICONS.Phone },
+        { type: 'NEWSLETTER', label: 'Newsletter', icon: ICONS.Mail },
+        { type: 'LOGO_CLOUD', label: 'Logos', icon: ICONS.Star },
     ];
 
     return (
@@ -324,13 +380,22 @@ const ElementorSidebar: React.FC<{
                     <ICONS.Menu size={20} />
                 </button>
                 <div className="font-bold text-gray-800 uppercase tracking-widest text-xs">Elementor CMS</div>
-                <button
-                    title="Widgets"
-                    onClick={() => { setActiveSectionId(null); setSidebarMode('WIDGETS'); }}
-                    className={`p-2 transition-colors ${sidebarMode === 'WIDGETS' ? 'text-green-600' : 'text-gray-400 hover:text-black'}`}
-                >
-                    <ICONS.LayoutDashboard size={20} />
-                </button>
+                <div className="flex gap-1">
+                    <button
+                        title="Templates Library"
+                        onClick={() => { setActiveSectionId(null); setSidebarMode('TEMPLATES'); }}
+                        className={`p-2 transition-colors ${sidebarMode === 'TEMPLATES' ? 'text-blue-600' : 'text-gray-400 hover:text-black'}`}
+                    >
+                        <ICONS.Bookmark size={20} />
+                    </button>
+                    <button
+                        title="Widgets"
+                        onClick={() => { setActiveSectionId(null); setSidebarMode('WIDGETS'); }}
+                        className={`p-2 transition-colors ${sidebarMode === 'WIDGETS' ? 'text-green-600' : 'text-gray-400 hover:text-black'}`}
+                    >
+                        <ICONS.LayoutDashboard size={20} />
+                    </button>
+                </div>
             </div>
 
             {/* Content Area */}
@@ -375,10 +440,10 @@ const ElementorSidebar: React.FC<{
                                 Content
                             </button>
                             <button
-                                onClick={() => setSidebarTab('style')}
-                                className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${sidebarTab === 'style' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-black'}`}
+                                onClick={() => setSidebarTab('advanced')}
+                                className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-wider transition-colors border-b-2 ${sidebarTab === 'advanced' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-black'}`}
                             >
-                                Style
+                                Advanced
                             </button>
                         </div>
 
@@ -388,6 +453,64 @@ const ElementorSidebar: React.FC<{
                                     <div className="p-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
                                         Edit text and images directly on the canvas. Use this panel for layout actions.
                                     </div>
+                                    {['FEATURES', 'FAQ', 'PRICING', 'TESTIMONIALS'].includes(activeSection.type) && (
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 uppercase mb-3 block">Manage Items</label>
+                                            <div className="space-y-2 mb-4">
+                                                {activeSection.content.items?.map((item: any, idx: number) => (
+                                                    <div key={idx} className="flex items-center gap-2 p-2 bg-white border rounded group">
+                                                        <span className="text-[10px] font-mono text-gray-400">#{idx + 1}</span>
+                                                        <span className="text-xs font-medium truncate flex-1">{item.title || item.question || item.author || 'Item'}</span>
+                                                        <button
+                                                            onClick={() => {
+                                                                const newItems = [...(activeSection.content.items || [])];
+                                                                newItems.splice(idx, 1);
+                                                                updateSection(activeSection.id, { items: newItems });
+                                                            }}
+                                                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                        >
+                                                            <ICONS.Trash size={12} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                {activeSection.content.plans?.map((plan: any, idx: number) => (
+                                                    <div key={idx} className="flex items-center gap-2 p-2 bg-white border rounded group">
+                                                        <span className="text-[10px] font-mono text-gray-400">#{idx + 1}</span>
+                                                        <span className="text-xs font-medium truncate flex-1">{plan.name}</span>
+                                                        <button
+                                                            onClick={() => {
+                                                                const newPlans = [...(activeSection.content.plans || [])];
+                                                                newPlans.splice(idx, 1);
+                                                                updateSection(activeSection.id, { plans: newPlans });
+                                                            }}
+                                                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                        >
+                                                            <ICONS.Trash size={12} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    if (activeSection.type === 'PRICING') {
+                                                        const newPlans = [...(activeSection.content.plans || []), { name: 'New Plan', price: '$20', features: ['Feature 1'] }];
+                                                        updateSection(activeSection.id, { plans: newPlans });
+                                                    } else {
+                                                        let newItem = {};
+                                                        if (activeSection.type === 'FEATURES') newItem = { title: 'New Feature', description: 'Feature description' };
+                                                        if (activeSection.type === 'FAQ') newItem = { question: 'New Question', answer: 'Answer goes here' };
+                                                        if (activeSection.type === 'TESTIMONIALS') newItem = { author: 'New Person', text: 'Terrific!', role: 'User' };
+                                                        const newItems = [...(activeSection.content.items || []), newItem];
+                                                        updateSection(activeSection.id, { items: newItems });
+                                                    }
+                                                }}
+                                                className="w-full py-2 bg-white border border-dashed border-gray-300 rounded text-xs font-bold text-gray-500 hover:border-green-500 hover:text-green-600 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <ICONS.Plus size={14} /> Add New Item
+                                            </button>
+                                        </div>
+                                    )}
+
                                     <div>
                                         <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Structure</label>
                                         <div className="flex gap-2 mb-2">
@@ -401,83 +524,181 @@ const ElementorSidebar: React.FC<{
                                         <button onClick={() => removeSection(activeSection.id)} className="w-full py-2 border border-red-200 text-red-600 bg-red-50 rounded hover:bg-red-100 flex items-center justify-center gap-2 text-xs font-bold">
                                             <ICONS.Trash size={14} /> Delete Section
                                         </button>
+                                        <button
+                                            onClick={() => {
+                                                const name = window.prompt('Save as template:', `${activeSection.type} Template`);
+                                                if (name) saveCMSTemplate({ name, type: 'SECTION', data: activeSection });
+                                            }}
+                                            className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center gap-2 text-xs font-bold shadow-md"
+                                        >
+                                            <ICONS.Bookmark size={14} /> Save as Template
+                                        </button>
                                     </div>
                                 </div>
                             )}
 
-                            {sidebarTab === 'style' && (
+                            {sidebarTab === 'advanced' && (
                                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    {/* Motion Effects */}
                                     <div>
                                         <h4 className="text-xs font-bold text-gray-900 uppercase mb-3 flex items-center gap-2">
-                                            <ICONS.Type size={14} /> Typography
+                                            <ICONS.Zap size={14} /> Motion Effects
                                         </h4>
-                                        <div className="flex items-center gap-3">
-                                            <input
-                                                type="color"
-                                                className="w-10 h-10 rounded-lg cursor-pointer border-0 p-0"
-                                                value={activeSection.content.textColor || '#000000'}
-                                                onChange={e => updateSection(activeSection.id, { textColor: e.target.value })}
-                                            />
+                                        <div>
+                                            <label className="text-[10px] text-gray-500 uppercase mb-1 block">Entrance Animation</label>
+                                            <select
+                                                className="w-full p-2 border rounded text-xs bg-white"
+                                                value={activeSection.advanced?.animation || 'none'}
+                                                onChange={e => updateSection(activeSection.id, { advanced: { ...(activeSection.advanced || {}), animation: e.target.value } })}
+                                            >
+                                                <option value="none">None</option>
+                                                <option value="fadeIn">Fade In</option>
+                                                <option value="slideUp">Slide Up</option>
+                                                <option value="slideDown">Slide Down</option>
+                                                <option value="zoomIn">Zoom In</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="h-px bg-gray-100"></div>
+
+                                    {/* Layout */}
+                                    <div>
+                                        <h4 className="text-xs font-bold text-gray-900 uppercase mb-3 flex items-center gap-2">
+                                            <ICONS.Layout size={14} /> Layout
+                                        </h4>
+                                        <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <label className="text-xs text-gray-500 block">Text Color</label>
-                                                <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">{activeSection.content.textColor || '#000000'}</code>
+                                                <label className="text-[10px] text-gray-500 uppercase mb-1 block">Z-Index</label>
+                                                <input
+                                                    type="number"
+                                                    className="w-full p-2 border rounded text-xs"
+                                                    value={activeSection.advanced?.zIndex || 0}
+                                                    onChange={e => updateSection(activeSection.id, { advanced: { ...(activeSection.advanced || {}), zIndex: parseInt(e.target.value) } })}
+                                                />
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="h-px bg-gray-200"></div>
+                                    <div className="h-px bg-gray-100"></div>
 
+                                    {/* Margin & Padding */}
                                     <div>
                                         <h4 className="text-xs font-bold text-gray-900 uppercase mb-3 flex items-center gap-2">
-                                            <ICONS.Layout size={14} /> Background
-                                        </h4>
-                                        <div className="flex items-center gap-3">
-                                            <input
-                                                type="color"
-                                                className="w-10 h-10 rounded-lg cursor-pointer border-0 p-0"
-                                                value={activeSection.content.bgColor || '#ffffff'}
-                                                onChange={e => updateSection(activeSection.id, { bgColor: e.target.value })}
-                                            />
-                                            <div>
-                                                <label className="text-xs text-gray-500 block">BG Color</label>
-                                                <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">{activeSection.content.bgColor || '#ffffff'}</code>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="h-px bg-gray-200"></div>
-
-                                    <div>
-                                        <h4 className="text-xs font-bold text-gray-900 uppercase mb-3 flex items-center gap-2">
-                                            <ICONS.MoreVertical size={14} /> Spacing
+                                            <ICONS.Move size={14} /> Spacing
                                         </h4>
                                         <div className="space-y-4">
                                             <div>
-                                                <div className="flex justify-between mb-1">
-                                                    <label className="text-xs text-gray-500">Top Padding</label>
-                                                    <span className="text-xs font-mono text-gray-400">{activeSection.content.paddingTop || 0}px</span>
+                                                <label className="text-[10px] text-gray-500 uppercase mb-2 block">Margin (px)</label>
+                                                <div className="grid grid-cols-4 gap-1">
+                                                    {['top', 'right', 'bottom', 'left'].map((dir) => (
+                                                        <div key={dir}>
+                                                            <input
+                                                                type="number"
+                                                                placeholder={dir[0].toUpperCase()}
+                                                                className="w-full p-1.5 border rounded text-[10px] text-center"
+                                                                value={activeSection.advanced?.margin?.[dir as keyof NonNullable<CMSSection['advanced']>['margin']] || 0}
+                                                                onChange={e => updateSection(activeSection.id, {
+                                                                    advanced: {
+                                                                        ...(activeSection.advanced || {}),
+                                                                        margin: { ...(activeSection.advanced?.margin || { top: 0, right: 0, bottom: 0, left: 0 }), [dir]: parseInt(e.target.value) || 0 }
+                                                                    }
+                                                                })}
+                                                            />
+                                                            <div className="text-[8px] text-gray-400 text-center mt-1 uppercase">{dir[0]}</div>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                <input
-                                                    type="range" min="0" max="200" step="4"
-                                                    value={activeSection.content.paddingTop || 0}
-                                                    onChange={e => updateSection(activeSection.id, { paddingTop: parseInt(e.target.value) })}
-                                                    className="w-full accent-green-600"
-                                                />
                                             </div>
                                             <div>
-                                                <div className="flex justify-between mb-1">
-                                                    <label className="text-xs text-gray-500">Bottom Padding</label>
-                                                    <span className="text-xs font-mono text-gray-400">{activeSection.content.paddingBottom || 0}px</span>
+                                                <label className="text-[10px] text-gray-500 uppercase mb-2 block">Padding (px)</label>
+                                                <div className="grid grid-cols-4 gap-1">
+                                                    {['top', 'right', 'bottom', 'left'].map((dir) => (
+                                                        <div key={dir}>
+                                                            <input
+                                                                type="number"
+                                                                placeholder={dir[0].toUpperCase()}
+                                                                className="w-full p-1.5 border rounded text-[10px] text-center"
+                                                                value={activeSection.advanced?.padding?.[dir as keyof NonNullable<CMSSection['advanced']>['padding']] || 0}
+                                                                onChange={e => updateSection(activeSection.id, {
+                                                                    advanced: {
+                                                                        ...(activeSection.advanced || {}),
+                                                                        padding: { ...(activeSection.advanced?.padding || { top: 0, right: 0, bottom: 0, left: 0 }), [dir]: parseInt(e.target.value) || 0 }
+                                                                    }
+                                                                })}
+                                                            />
+                                                            <div className="text-[8px] text-gray-400 text-center mt-1 uppercase">{dir[0]}</div>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                <input
-                                                    type="range" min="0" max="200" step="4"
-                                                    value={activeSection.content.paddingBottom || 0}
-                                                    onChange={e => updateSection(activeSection.id, { paddingBottom: parseInt(e.target.value) })}
-                                                    className="w-full accent-green-600"
-                                                />
                                             </div>
                                         </div>
                                     </div>
+
+                                    <div className="h-px bg-gray-100"></div>
+
+                                    {/* Custom CSS */}
+                                    <div>
+                                        <h4 className="text-xs font-bold text-gray-900 uppercase mb-3 flex items-center gap-2">
+                                            <ICONS.FileText size={14} /> Custom CSS
+                                        </h4>
+                                        <p className="text-[10px] text-gray-400 mb-2 italic">Use "selector" to target the current section.</p>
+                                        <textarea
+                                            className="w-full p-3 bg-gray-900 text-green-400 font-mono text-[10px] rounded h-32 outline-none focus:ring-1 focus:ring-green-500"
+                                            placeholder="selector { border: 1px solid red; }"
+                                            value={activeSection.advanced?.customCSS || ''}
+                                            onChange={e => updateSection(activeSection.id, { advanced: { ...(activeSection.advanced || {}), customCSS: e.target.value } })}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {sidebarMode === 'TEMPLATES' && (
+                    <div className="p-4 h-full flex flex-col">
+                        <div className="border-b pb-4 mb-4">
+                            <h3 className="font-black text-lg text-gray-800 tracking-tight">Templates Library</h3>
+                            <p className="text-[10px] text-gray-400">Insert your saved sections</p>
+                        </div>
+                        <div className="space-y-3 flex-1 overflow-y-auto">
+                            {cmsTemplates.map(tpl => (
+                                <div key={tpl.id} className="p-3 bg-white border rounded-lg shadow-sm hover:shadow-md transition-all group">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <h4 className="text-xs font-bold text-gray-800">{tpl.name}</h4>
+                                            <span className="text-[9px] text-gray-400 uppercase font-mono">{tpl.type}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => deleteCMSTemplate(tpl.id)}
+                                            className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                        >
+                                            <ICONS.Trash size={12} />
+                                        </button>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            if (tpl.type === 'SECTION') {
+                                                const section = tpl.data as CMSSection;
+                                                const newSection = { ...section, id: Math.random().toString(36).substr(2, 9) };
+                                                setEditingPage({
+                                                    ...editingPage,
+                                                    sections: [...(editingPage.sections || []), newSection].map((s, i) => ({ ...s, order: i + 1 }))
+                                                });
+                                                setActiveSectionId(newSection.id);
+                                            }
+                                        }}
+                                        className="w-full py-1.5 bg-blue-50 text-blue-600 text-[10px] font-black uppercase rounded hover:bg-blue-600 hover:text-white transition-all"
+                                    >
+                                        Insert
+                                    </button>
+                                </div>
+                            ))}
+                            {cmsTemplates.length === 0 && (
+                                <div className="text-center py-20">
+                                    <ICONS.Bookmark size={40} className="text-gray-200 mx-auto mb-3" />
+                                    <p className="text-[10px] text-gray-400">No templates saved yet.<br />Save a section to see it here.</p>
                                 </div>
                             )}
                         </div>
@@ -522,6 +743,99 @@ const ElementorSidebar: React.FC<{
                             <option value="PUBLISHED">Published</option>
                         </select>
                     </div>
+
+                    <div className="h-px bg-gray-200"></div>
+
+                    {/* Global Typography */}
+                    <div>
+                        <h4 className="text-xs font-bold text-gray-900 uppercase mb-3 flex items-center gap-2">
+                            <ICONS.Type size={14} /> Global Typography
+                        </h4>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[10px] text-gray-500 uppercase mb-1 block">Heading Font</label>
+                                <select
+                                    className="w-full p-2 border rounded text-xs bg-white"
+                                    value={editingPage.settings?.globalFonts?.heading || 'Inter'}
+                                    onChange={e => setEditingPage({
+                                        ...editingPage,
+                                        settings: {
+                                            ...(editingPage.settings || {}),
+                                            globalFonts: { ...(editingPage.settings?.globalFonts || { heading: 'Inter', body: 'Inter' }), heading: e.target.value }
+                                        }
+                                    })}
+                                >
+                                    <option value="Inter">Inter</option>
+                                    <option value="Outfit">Outfit</option>
+                                    <option value="Playfair Display">Playfair Display</option>
+                                    <option value="Montserrat">Montserrat</option>
+                                    <option value="Roboto">Roboto</option>
+                                    <option value="Poppins">Poppins</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500 uppercase mb-1 block">Body Font</label>
+                                <select
+                                    className="w-full p-2 border rounded text-xs bg-white"
+                                    value={editingPage.settings?.globalFonts?.body || 'Inter'}
+                                    onChange={e => setEditingPage({
+                                        ...editingPage,
+                                        settings: {
+                                            ...(editingPage.settings || {}),
+                                            globalFonts: { ...(editingPage.settings?.globalFonts || { heading: 'Inter', body: 'Inter' }), body: e.target.value }
+                                        }
+                                    })}
+                                >
+                                    <option value="Inter">Inter</option>
+                                    <option value="Outfit">Outfit</option>
+                                    <option value="Open Sans">Open Sans</option>
+                                    <option value="Lato">Lato</option>
+                                    <option value="Roboto">Roboto</option>
+                                    <option value="Source Sans Pro">Source Sans Pro</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="h-px bg-gray-200"></div>
+
+                    {/* Global Colors */}
+                    <div>
+                        <h4 className="text-xs font-bold text-gray-900 uppercase mb-3 flex items-center gap-2">
+                            <ICONS.Palette size={14} /> Global Colors
+                        </h4>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[10px] text-gray-500 uppercase mb-1 block">Primary Green</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="color"
+                                        className="w-10 h-10 border rounded cursor-pointer"
+                                        value={editingPage.settings?.globalColors?.primary || '#22c55e'}
+                                        onChange={e => setEditingPage({
+                                            ...editingPage,
+                                            settings: {
+                                                ...(editingPage.settings || {}),
+                                                globalColors: { ...(editingPage.settings?.globalColors || { primary: '#22c55e', secondary: '#3b82f6', accent: '#f59e0b', background: '#ffffff', text: '#111827' }), primary: e.target.value }
+                                            }
+                                        })}
+                                    />
+                                    <input
+                                        type="text"
+                                        className="flex-1 p-2 border rounded text-xs"
+                                        value={editingPage.settings?.globalColors?.primary || '#22c55e'}
+                                        onChange={e => setEditingPage({
+                                            ...editingPage,
+                                            settings: {
+                                                ...(editingPage.settings || {}),
+                                                globalColors: { ...(editingPage.settings?.globalColors || { primary: '#22c55e', secondary: '#3b82f6', accent: '#f59e0b', background: '#ffffff', text: '#111827' }), primary: e.target.value }
+                                            }
+                                        })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -535,9 +849,73 @@ const ElementorSidebar: React.FC<{
                         {editingPage.sections?.map((section, idx) => (
                             <div
                                 key={section.id}
-                                className={`p-3 rounded border flex items-center gap-3 cursor-pointer transition-colors ${activeSection?.id === section.id ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100 hover:bg-gray-50'}`}
+                                draggable
+                                onDragStart={(e) => {
+                                    e.dataTransfer.setData('sourceIndex', idx.toString());
+                                    e.currentTarget.style.opacity = '0.5';
+                                }}
+                                onDragEnd={(e) => {
+                                    e.currentTarget.style.opacity = '1';
+                                    const items = document.querySelectorAll('.nav-item');
+                                    items.forEach(el => el.classList.remove('border-t-4', 'border-blue-500', 'bg-blue-50'));
+                                }}
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const midpoint = rect.top + rect.height / 2;
+
+                                    // Remove existing indicators
+                                    e.currentTarget.classList.remove('border-t-4', 'border-b-4', 'border-blue-500');
+
+                                    if (e.clientY < midpoint) {
+                                        e.currentTarget.classList.add('border-t-4', 'border-blue-500');
+                                        e.currentTarget.dataset.dropPos = 'before';
+                                    } else {
+                                        e.currentTarget.classList.add('border-b-4', 'border-blue-500');
+                                        e.currentTarget.dataset.dropPos = 'after';
+                                    }
+                                }}
+                                onDragLeave={(e) => {
+                                    e.currentTarget.classList.remove('border-t-4', 'border-b-4', 'border-blue-500');
+                                }}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    const dropPos = e.currentTarget.dataset.dropPos;
+                                    e.currentTarget.classList.remove('border-t-4', 'border-b-4', 'border-blue-500');
+
+                                    const sourceIndex = parseInt(e.dataTransfer.getData('sourceIndex'));
+                                    let targetIndex = idx;
+
+                                    if (dropPos === 'after' && sourceIndex < idx) {
+                                        // No change or handled by splice
+                                    } else if (dropPos === 'after' && sourceIndex > idx) {
+                                        // targetIndex = idx; // splice will put it after
+                                    }
+
+                                    // Simpler logic for splice reordering:
+                                    // If 'after', the real target index is idx + 1 (unless it's the source itself)
+                                    const finalTarget = dropPos === 'after' ? idx : idx;
+                                    // Actually, if we use the existing reorderSections, it splices out source then inserts at target.
+                                    // If source was 0 and target is 1, and we say 'after', we want it at index 1.
+                                    // Splice(0, 1) -> [1, 2]. Splice(1, 0, 0) -> [1, 0, 2]. Correct.
+                                    // If 'before' index 1, Splice(1, 0, 0) -> [1, 0, 2]. Same?
+                                    // Wait. If source=0, target=1:
+                                    // 'before' 1: splice(1, 0, 0) -> [1, 0, 2].
+                                    // 'after' 1: splice(2, 0, 0) -> [1, 2, 0].
+
+                                    let adjustedTarget = idx;
+                                    if (dropPos === 'after') adjustedTarget = idx + 1;
+
+                                    if (sourceIndex !== adjustedTarget && sourceIndex !== adjustedTarget - 1) {
+                                        reorderSections(sourceIndex, adjustedTarget);
+                                    }
+                                }}
+                                className={`nav-item p-3 rounded border flex items-center gap-3 cursor-pointer transition-all ${activeSection?.id === section.id ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100 hover:bg-gray-50'}`}
                                 onClick={() => setActiveSectionId(section.id)}
                             >
+                                <div className="text-gray-400 cursor-move">
+                                    <ICONS.Menu size={14} />
+                                </div>
                                 <span className="text-gray-400 text-xs font-mono w-4">{idx + 1}</span>
                                 <ICONS.Layout className="text-gray-400" size={14} />
                                 <span className="text-sm font-medium text-gray-700">{section.type}</span>

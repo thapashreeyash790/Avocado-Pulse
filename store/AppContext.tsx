@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { Task, TaskStatus, UserRole, ApprovalStatus, User, Activity, AppNotification, Project, ClientProfile, Invoice, TaskPriority, Conversation, Message, Doc, TimeEntry, Lead, LeadStatus, Expense, Estimate, SupportTicket, TicketStatus, TicketPriority, Announcement, WorkspaceSettings, CustomFieldDefinition, CMSPage } from '../types';
+import { Task, TaskStatus, UserRole, ApprovalStatus, User, Activity, AppNotification, Project, ClientProfile, Invoice, TaskPriority, Conversation, Message, Doc, TimeEntry, Lead, LeadStatus, Expense, Estimate, SupportTicket, TicketStatus, TicketPriority, Announcement, WorkspaceSettings, CustomFieldDefinition, CMSPage, CMSTemplate } from '../types';
 import { api } from '../services/api';
 import * as crypto from '../services/crypto';
 
@@ -84,6 +84,9 @@ interface AppContextType {
   fetchCMSPages: () => Promise<void>;
   saveCMSPage: (page: Partial<CMSPage>) => Promise<void>;
   deleteCMSPage: (pageId: string) => Promise<void>;
+  cmsTemplates: CMSTemplate[];
+  saveCMSTemplate: (template: Partial<CMSTemplate>) => Promise<void>;
+  deleteCMSTemplate: (templateId: string) => Promise<void>;
   deleteInvoice: (invoiceId: string) => Promise<void>;
   deleteEstimate: (estimateId: string) => Promise<void>;
   deleteExpense: (expenseId: string) => Promise<void>;
@@ -143,6 +146,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
   const [cmsPages, setCmsPages] = useState<CMSPage[]>([]);
+  const [cmsTemplates, setCmsTemplates] = useState<CMSTemplate[]>([]);
   const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null);
 
   // Theme State
@@ -226,8 +230,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Cache for preventing unnecessary re-renders
   const lastFetchedRef = useRef<any>({});
+  // Ref to prevent overlapping requests without triggering re-renders
+  const isFetchingRef = useRef(false);
 
   const loadAllData = useCallback(async () => {
+    console.log('[AppContext] loadAllData triggered. User:', user?.id, 'IsLoading:', isFetchingRef.current);
+    if (isFetchingRef.current) return;
+
+    isFetchingRef.current = true;
+    setIsLoading(true);
+    // 1. Fetch Guest-accessible data first (CMS Pages & Templates)
+    try {
+      const [fPages, fTemplates] = await Promise.all([
+        api.fetchResource('pages'),
+        api.fetchResource('templates')
+      ]);
+      if (fPages && Array.isArray(fPages)) {
+        if (JSON.stringify(fPages) !== lastFetchedRef.current['pages']) {
+          lastFetchedRef.current['pages'] = JSON.stringify(fPages);
+          setCmsPages(fPages);
+        }
+      }
+      if (fTemplates && Array.isArray(fTemplates)) {
+        if (JSON.stringify(fTemplates) !== lastFetchedRef.current['templates']) {
+          lastFetchedRef.current['templates'] = JSON.stringify(fTemplates);
+          setCmsTemplates(fTemplates);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load public CMS data:', e);
+    }
+
     if (!user) return;
     const perms = user.permissions || { billing: true, projects: true, timeline: true, management: false, messages: true, docs: true };
     const isAdmin = user.role === UserRole.ADMIN;
@@ -243,7 +276,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     try {
-      const [fProjects, fClients, fInvoices, fTasks, fUsers, fConvs, fDocs, fActivities, fTime, fLeads, fExpenses, fEstimates, fTickets, fAnnouncements, fSettings, fPages] = await Promise.all([
+      const [fProjects, fClients, fInvoices, fTasks, fUsers, fConvs, fDocs, fActivities, fTime, fLeads, fExpenses, fEstimates, fTickets, fAnnouncements, fSettings] = await Promise.all([
         safeRequest((isAdmin || perms.projects !== false) ? api.fetchProjects() : Promise.resolve([]), 'projects'),
         safeRequest((isAdmin || perms.management === true) ? api.fetchClients() : Promise.resolve([]), 'clients'),
         safeRequest((isAdmin || perms.billing !== false) ? api.fetchInvoices() : Promise.resolve([]), 'invoices'),
@@ -258,8 +291,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         safeRequest(api.fetchResource('estimates'), 'estimates'),
         safeRequest(api.fetchResource('tickets'), 'tickets'),
         safeRequest(api.fetchResource('announcements'), 'announcements'),
-        safeRequest(api.fetchResource('settings'), 'settings'),
-        safeRequest(api.fetchResource('pages'), 'pages')
+        safeRequest(api.fetchResource('settings'), 'settings')
       ]);
 
       // Optimize State Updates: Only set state if data changed
@@ -316,8 +348,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateIfChanged('estimates', fEstimates || [], setEstimates);
       updateIfChanged('tickets', fTickets || [], setTickets);
       updateIfChanged('announcements', fAnnouncements || [], setAnnouncements);
-      updateIfChanged('pages', fPages || [], setCmsPages);
-
       if (fSettings && fSettings.length > 0) {
         updateIfChanged('settings', fSettings[0], setSettings);
       } else {
@@ -344,18 +374,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (savedClients) setClients(JSON.parse(savedClients));
       if (savedInvoices) setInvoices(JSON.parse(savedInvoices));
       if (savedActivities) setActivities(JSON.parse(savedActivities));
+    } finally {
+      isFetchingRef.current = false;
+      setIsLoading(false);
     }
-  }, [user]);
+  }, [user, privateKey]); // removed isLoading dependency
 
   useEffect(() => {
     loadAllData();
-    // Poll for real-time updates every 3 seconds
+    // Poll for real-time updates every 10 seconds (reduced from 3s to improve stability)
     const intervalId = setInterval(() => {
       // Poll even if hidden to ensure data is fresh when returning
       if (user) {
         loadAllData();
       }
-    }, 3000);
+    }, 10000);
     return () => clearInterval(intervalId);
   }, [loadAllData, user]);
 
@@ -705,6 +738,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       pushNotification(`Deletion failed: ${err.message}`, 'error');
     }
   };
+
+  const saveCMSTemplate = useCallback(async (template: Partial<CMSTemplate>) => {
+    try {
+      let result;
+      if (template.id) {
+        result = await api.updateResource('templates', template.id, template);
+        setCmsTemplates(prev => prev.map(t => t.id === template.id ? result : t));
+      } else {
+        const newTemplate = {
+          ...template,
+          id: Math.random().toString(36).substr(2, 9),
+          createdAt: new Date().toISOString()
+        };
+        result = await api.createResource('templates', newTemplate);
+        setCmsTemplates(prev => [...prev, result]);
+      }
+      pushNotification('Template saved successfully', 'success');
+    } catch (err: any) {
+      pushNotification(`Failed to save template: ${err.message}`, 'error');
+    }
+  }, [pushNotification]);
+
+  const deleteCMSTemplate = useCallback(async (templateId: string) => {
+    if (!window.confirm('Are you sure you want to delete this template?')) return;
+    try {
+      await api.deleteResource('templates', templateId);
+      setCmsTemplates(prev => prev.filter(t => t.id !== templateId));
+      pushNotification('Template deleted', 'success');
+    } catch (err: any) {
+      pushNotification(`Deletion failed: ${err.message}`, 'error');
+    }
+  }, [pushNotification]);
 
   const addProject = async (project: Omit<Project, 'id'>) => {
     try {
@@ -1386,9 +1451,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       tickets, addTicket, updateTicketStatus, announcements, addAnnouncement,
       settings, updateSettings,
       cmsPages,
+      cmsTemplates,
       fetchCMSPages,
       saveCMSPage,
       deleteCMSPage,
+      saveCMSTemplate,
+      deleteCMSTemplate,
       deleteInvoice,
       deleteEstimate,
       deleteExpense,
