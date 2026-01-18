@@ -49,7 +49,7 @@ const ChatView: React.FC = () => {
 
     const filteredUsers = allUsers.filter(u =>
         u.id !== user?.id &&
-        (u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase()))
+        (u.name?.toLowerCase().includes(searchTerm.toLowerCase()) || u.email?.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     useEffect(() => {
