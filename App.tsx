@@ -16,10 +16,6 @@ import DocsView from './components/DocsView';
 import LeadsView from './components/LeadsView';
 import SupportView from './components/SupportView';
 import MyStuffView from './components/MyStuffView';
-import LandingPage from './components/LandingPage';
-import CMSDashboard from './components/CMSDashboard';
-import DynamicLandingPage from './components/DynamicLandingPage';
-import CMSPreview from './components/CMSPreview';
 import { AppProvider, useApp } from './store/AppContext';
 import { ICONS } from './constants';
 import { UserRole } from './types';
@@ -50,7 +46,6 @@ const AuthenticatedApp: React.FC = () => {
         <Route path="docs" element={<DocsView />} />
         <Route path="leads" element={<LeadsView />} />
         <Route path="support" element={<SupportView />} />
-        {isAdmin && <Route path="cms" element={<CMSDashboard />} />}
         <Route path="*" element={<Navigate to="/app" replace />} />
       </Routes>
     </Layout>
@@ -62,9 +57,7 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to="/app" replace /> : <DynamicLandingPage />} />
-      <Route path="/preview" element={<CMSPreview />} />
-      <Route path="/p/:slug" element={<DynamicLandingPage />} />
+      <Route path="/" element={user ? <Navigate to="/app" replace /> : <Navigate to="/login" replace />} />
       <Route path="/login" element={user ? <Navigate to="/app" replace /> : <LoginView initialIsLogin={true} />} />
       <Route path="/signup" element={user ? <Navigate to="/app" replace /> : <LoginView initialIsLogin={false} />} />
       <Route path="/verify" element={<VerifyEmailView />} />

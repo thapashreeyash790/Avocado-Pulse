@@ -200,32 +200,7 @@ const announcementSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-const cmsPageSchema = new mongoose.Schema({
-  id: { type: String, unique: true, required: true },
-  slug: { type: String, unique: true, required: true },
-  title: String,
-  status: { type: String, enum: ['DRAFT', 'PUBLISHED'], default: 'DRAFT' },
-  sections: [{
-    id: String,
-    type: { type: String },
-    content: mongoose.Schema.Types.Mixed,
-    order: Number,
-    advanced: mongoose.Schema.Types.Mixed
-  }],
-  settings: mongoose.Schema.Types.Mixed,
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
 
-const templateSchema = new mongoose.Schema({
-  id: { type: String, unique: true, required: true },
-  name: String,
-  type: { type: String },
-  data: mongoose.Schema.Types.Mixed,
-  previewImage: String,
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
 
 const User = mongoose.model('User', userSchema);
 const Client = mongoose.model('Client', clientSchema);
@@ -239,8 +214,6 @@ const Expense = mongoose.model('Expense', expenseSchema);
 const Estimate = mongoose.model('Estimate', estimateSchema);
 const Ticket = mongoose.model('Ticket', ticketSchema);
 const Announcement = mongoose.model('Announcement', announcementSchema);
-const Page = mongoose.model('Page', cmsPageSchema);
-const Template = mongoose.model('Template', templateSchema);
 
 const TimeEntry = mongoose.model('TimeEntry', new mongoose.Schema({
   id: { type: String, unique: true },
@@ -317,9 +290,7 @@ const getModel = (resource) => {
     tickets: Ticket,
     announcements: Announcement,
     settings: Settings,
-    timeEntry: TimeEntry,
-    pages: Page,
-    templates: Template
+    timeEntry: TimeEntry
   };
   return models[resource];
 };

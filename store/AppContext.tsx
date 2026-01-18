@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { Task, TaskStatus, UserRole, ApprovalStatus, User, Activity, AppNotification, Project, ClientProfile, Invoice, TaskPriority, Conversation, Message, Doc, TimeEntry, Lead, LeadStatus, Expense, Estimate, SupportTicket, TicketStatus, TicketPriority, Announcement, WorkspaceSettings, CustomFieldDefinition, CMSPage, CMSTemplate } from '../types';
+import { Task, TaskStatus, UserRole, ApprovalStatus, User, Activity, AppNotification, Project, ClientProfile, Invoice, TaskPriority, Conversation, Message, Doc, TimeEntry, Lead, LeadStatus, Expense, Estimate, SupportTicket, TicketStatus, TicketPriority, Announcement, WorkspaceSettings, CustomFieldDefinition } from '../types';
 import { api } from '../services/api';
 import * as crypto from '../services/crypto';
 
@@ -80,13 +80,6 @@ interface AppContextType {
   addAnnouncement: (announcement: Omit<Announcement, 'id' | 'createdAt'>) => Promise<void>;
   settings: WorkspaceSettings | null;
   updateSettings: (settings: Partial<WorkspaceSettings>) => Promise<void>;
-  cmsPages: CMSPage[];
-  fetchCMSPages: () => Promise<void>;
-  saveCMSPage: (page: Partial<CMSPage>) => Promise<void>;
-  deleteCMSPage: (pageId: string) => Promise<void>;
-  cmsTemplates: CMSTemplate[];
-  saveCMSTemplate: (template: Partial<CMSTemplate>) => Promise<void>;
-  deleteCMSTemplate: (templateId: string) => Promise<void>;
   deleteInvoice: (invoiceId: string) => Promise<void>;
   deleteEstimate: (estimateId: string) => Promise<void>;
   deleteExpense: (expenseId: string) => Promise<void>;
@@ -145,8 +138,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
-  const [cmsPages, setCmsPages] = useState<CMSPage[]>([]);
-  const [cmsTemplates, setCmsTemplates] = useState<CMSTemplate[]>([]);
   const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null);
 
   // Theme State
@@ -239,29 +230,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     isFetchingRef.current = true;
     setIsLoading(true);
-    // 1. Fetch Guest-accessible data first (CMS Pages & Templates)
-    try {
-      const [fPages, fTemplates] = await Promise.all([
-        api.fetchResource('pages'),
-        api.fetchResource('templates')
-      ]);
-      if (fPages && Array.isArray(fPages)) {
-        if (JSON.stringify(fPages) !== lastFetchedRef.current['pages']) {
-          lastFetchedRef.current['pages'] = JSON.stringify(fPages);
-          setCmsPages(fPages);
-        }
-      }
-      if (fTemplates && Array.isArray(fTemplates)) {
-        if (JSON.stringify(fTemplates) !== lastFetchedRef.current['templates']) {
-          lastFetchedRef.current['templates'] = JSON.stringify(fTemplates);
-          setCmsTemplates(fTemplates);
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to load public CMS data:', e);
-    }
+    isFetchingRef.current = true;
+    setIsLoading(true);
 
-    if (!user) return;
+    if (!user) {
+      isFetchingRef.current = false;
+      setIsLoading(false);
+      return;
+    }
     const perms = user.permissions || { billing: true, projects: true, timeline: true, management: false, messages: true, docs: true };
     const isAdmin = user.role === UserRole.ADMIN;
 
@@ -698,78 +674,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const fetchCMSPages = useCallback(async () => {
-    try {
-      const pages = await api.fetchResource('pages');
-      setCmsPages(pages);
-    } catch (err) {
-      console.error('Failed to fetch CMS pages', err);
-    }
-  }, []);
 
-  const saveCMSPage = async (page: Partial<CMSPage>) => {
-    try {
-      let result;
-      if (page.id) {
-        result = await api.updateResource('pages', page.id, page);
-        setCmsPages(prev => prev.map(p => p.id === page.id ? result : p));
-      } else {
-        const newPage = {
-          ...page,
-          id: Math.random().toString(36).substr(2, 9),
-          createdAt: new Date().toISOString()
-        };
-        result = await api.createResource('pages', newPage);
-        setCmsPages(prev => [...prev, result]);
-      }
-      pushNotification('Page saved successfully', 'success');
-    } catch (err: any) {
-      pushNotification(`Failed to save page: ${err.message}`, 'error');
-    }
-  };
-
-  const deleteCMSPage = async (pageId: string) => {
-    if (!window.confirm('Are you sure you want to delete this page?')) return;
-    try {
-      await api.deleteResource('pages', pageId);
-      setCmsPages(prev => prev.filter(p => p.id !== pageId));
-      pushNotification('Page deleted', 'success');
-    } catch (err: any) {
-      pushNotification(`Deletion failed: ${err.message}`, 'error');
-    }
-  };
-
-  const saveCMSTemplate = useCallback(async (template: Partial<CMSTemplate>) => {
-    try {
-      let result;
-      if (template.id) {
-        result = await api.updateResource('templates', template.id, template);
-        setCmsTemplates(prev => prev.map(t => t.id === template.id ? result : t));
-      } else {
-        const newTemplate = {
-          ...template,
-          id: Math.random().toString(36).substr(2, 9),
-          createdAt: new Date().toISOString()
-        };
-        result = await api.createResource('templates', newTemplate);
-        setCmsTemplates(prev => [...prev, result]);
-      }
-      pushNotification('Template saved successfully', 'success');
-    } catch (err: any) {
-      pushNotification(`Failed to save template: ${err.message}`, 'error');
-    }
-  }, [pushNotification]);
-
-  const deleteCMSTemplate = useCallback(async (templateId: string) => {
-    if (!window.confirm('Are you sure you want to delete this template?')) return;
-    try {
-      await api.deleteResource('templates', templateId);
-      setCmsTemplates(prev => prev.filter(t => t.id !== templateId));
-      pushNotification('Template deleted', 'success');
-    } catch (err: any) {
-      pushNotification(`Deletion failed: ${err.message}`, 'error');
-    }
-  }, [pushNotification]);
 
   const addProject = async (project: Omit<Project, 'id'>) => {
     try {
@@ -1460,13 +1365,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       expenses, addExpense, estimates, addEstimate, convertEstimateToInvoice,
       tickets, addTicket, updateTicketStatus, announcements, addAnnouncement,
       settings, updateSettings,
-      cmsPages,
-      cmsTemplates,
-      fetchCMSPages,
-      saveCMSPage,
-      deleteCMSPage,
-      saveCMSTemplate,
-      deleteCMSTemplate,
       deleteInvoice,
       deleteEstimate,
       deleteExpense,
