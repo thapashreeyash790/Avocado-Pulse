@@ -183,7 +183,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [activeTimer]);
 
 
+  // Register Service Worker & Request Notification Permission
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(registration => console.log('Service Worker registered with scope:', registration.scope))
+        .catch(err => console.log('Service Worker registration failed:', err));
+    }
+
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          new Notification('Notifications Enabled', {
+            body: 'You will now receive updates from Avocado PM.',
+            icon: '/icon.svg' // Fallback if manifest icon not used
+          });
+        }
+      });
+    }
+  }, []);
+
   const pushNotification = useCallback((message: string, type: AppNotification['type'] = 'info') => {
+    // In-app notification
     const newNotif: AppNotification = {
       id: Math.random().toString(36).substr(2, 9),
       message,
@@ -192,6 +213,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       read: false
     };
     setNotifications(prev => [newNotif, ...prev].slice(0, 20));
+
+    // Browser Notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      // Only notify for success/info/error, maybe skip generic "Processing" if we had that.
+      // And maybe only if document is hidden? For now, we'll do it always for visibility.
+      navigator.serviceWorker.ready.then(registration => {
+        registration.showNotification('Avocado Update', {
+          body: message,
+          icon: '/icon.svg',
+          badge: '/icon.svg',
+          data: { url: window.location.href }
+        });
+      }).catch(() => {
+        // Fallback if SW not ready or not supported properly
+        new Notification('Avocado Update', { body: message, icon: '/icon.svg' });
+      });
+    }
   }, []);
 
   const logActivity = useCallback(async (action: string, type: Activity['type'], taskId?: string, taskTitle?: string) => {
