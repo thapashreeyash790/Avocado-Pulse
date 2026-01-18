@@ -183,6 +183,7 @@ const ticketSchema = new mongoose.Schema({
   projectId: String,
   subject: String,
   description: String,
+  createdByName: String,
   status: { type: String, enum: ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'], default: 'OPEN' },
   priority: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'], default: 'MEDIUM' },
   assignedTo: String,

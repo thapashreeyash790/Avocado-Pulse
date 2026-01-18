@@ -833,9 +833,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const isInternal = user?.role === UserRole.TEAM || user?.role === UserRole.ADMIN;
 
   const filteredProjects = projects.filter(p => {
-    const isVisible = (isAdmin || user?.accessibleProjects?.includes(p.id) || p.clientId === user?.email);
-    const isNotArchived = p.status !== 'ARCHIVED';
-    return isVisible && isNotArchived;
+    if (isAdmin) return true;
+    if (user?.accessibleProjects?.includes(p.id)) return true;
+
+    // Check Client ID against User ID or Email (Case Insensitive)
+    const clientId = p.clientId?.toLowerCase() || '';
+    const userEmail = user?.email?.toLowerCase() || '';
+    const userId = user?.id || '';
+
+    const isClientMatch = clientId === userEmail || clientId === userId;
+
+    // Only show active if not admin (though dashboard allows showing archived, we usually hide archived by default in context unless requested? 
+    // Original code: const isVisible = (isAdmin || user?.accessibleProjects?.includes(p.id) || p.clientId === user?.email);
+    // Original code: const isNotArchived = p.status !== 'ARCHIVED';
+    // Original code: return isVisible && isNotArchived;
+    // Wait, original logic was finding "isVisible" AND "isNotArchived". 
+    // If I change return, I must preserve "isNotArchived" unless that was also causing issues? 
+    // "p.status !== 'ARCHIVED'" is correct.
+
+    return isClientMatch && p.status !== 'ARCHIVED';
   });
 
   const filteredTasks = isInternal
@@ -1377,7 +1393,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addTicket = useCallback(async (ticket: Omit<SupportTicket, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      const created = await api.createResource('tickets', ticket);
+      const payload = {
+        ...ticket,
+        createdByName: user?.name || 'Unknown User'
+      };
+      const created = await api.createResource('tickets', payload);
       setTickets(prev => [...prev, created]);
       pushNotification('Ticket submitted', 'success');
     } catch (err: any) {

@@ -5,7 +5,7 @@ import { ICONS } from '../constants';
 import { UserRole, SupportTicket, TicketStatus, TicketPriority, isInternalRole } from '../types';
 
 const SupportView: React.FC = () => {
-    const { tickets, addTicket, updateTicketStatus, user, clients, projects } = useApp();
+    const { tickets, addTicket, updateTicketStatus, user, clients, projects, allUsers } = useApp();
     const [showNewTicket, setShowNewTicket] = useState(false);
     const [filter, setFilter] = useState<TicketStatus | 'ALL'>('ALL');
 
@@ -51,8 +51,8 @@ const SupportView: React.FC = () => {
                 {filteredTickets.length > 0 ? filteredTickets.map(ticket => (
                     <div key={ticket.id} className="bg-white border border-gray-100 rounded-3xl p-6 hover:shadow-xl hover:shadow-indigo-50/50 transition-all group relative overflow-hidden">
                         <div className={`absolute top-0 left-0 w-1 h-full ${ticket.priority === TicketPriority.URGENT ? 'bg-red-500' :
-                                ticket.priority === TicketPriority.HIGH ? 'bg-orange-500' :
-                                    ticket.priority === TicketPriority.MEDIUM ? 'bg-indigo-500' : 'bg-slate-300'
+                            ticket.priority === TicketPriority.HIGH ? 'bg-orange-500' :
+                                ticket.priority === TicketPriority.MEDIUM ? 'bg-indigo-500' : 'bg-slate-300'
                             }`} />
 
                         <div className="flex justify-between items-start">
@@ -60,7 +60,7 @@ const SupportView: React.FC = () => {
                                 <div className="flex items-center gap-3">
                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">#{ticket.id.slice(-6)}</span>
                                     <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter ${ticket.priority === TicketPriority.URGENT ? 'bg-red-100 text-red-700' :
-                                            ticket.priority === TicketPriority.HIGH ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
+                                        ticket.priority === TicketPriority.HIGH ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
                                         }`}>{ticket.priority}</span>
                                 </div>
                                 <h3 className="text-lg font-bold text-black group-hover:text-indigo-600 transition-colors">{ticket.subject}</h3>
@@ -69,8 +69,8 @@ const SupportView: React.FC = () => {
 
                             <div className="text-right space-y-3">
                                 <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${ticket.status === TicketStatus.OPEN ? 'bg-green-100 text-green-700' :
-                                        ticket.status === TicketStatus.IN_PROGRESS ? 'bg-blue-100 text-blue-700' :
-                                            ticket.status === TicketStatus.RESOLVED ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'
+                                    ticket.status === TicketStatus.IN_PROGRESS ? 'bg-blue-100 text-blue-700' :
+                                        ticket.status === TicketStatus.RESOLVED ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'
                                     }`}>{ticket.status}</span>
 
                                 {isInternal && ticket.status !== TicketStatus.RESOLVED && (
@@ -85,8 +85,7 @@ const SupportView: React.FC = () => {
                         <div className="mt-6 pt-Underline border-t border-gray-50 flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-1.5">
-                                    <ICONS.Users className="w-3.5 h-3.5 text-slate-300" />
-                                    <span className="text-xs text-slate-500 font-medium">{clients.find(c => c.id === ticket.clientId)?.name || 'Unknown Client'}</span>
+                                    <span className="text-xs text-slate-500 font-medium">{allUsers.find(u => u.id === ticket.clientId)?.name || clients.find(c => c.id === ticket.clientId)?.name || (ticket as any).createdByName || 'Unknown Client'}</span>
                                 </div>
                                 {ticket.projectId && (
                                     <div className="flex items-center gap-1.5">
