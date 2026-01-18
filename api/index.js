@@ -475,6 +475,22 @@ app.post('/api/team/invite', async (req, res) => {
   });
 });
 
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase(), password });
+    if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+    if (user.verified === false) return res.status(403).json({ error: 'Email not verified' });
+
+    const { password: _, ...safe } = user.toObject();
+    res.json(safe);
+  } catch (err) {
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
 app.post('/api/auth/verify', async (req, res) => {
   const { token } = req.body;
   let record;
@@ -606,9 +622,18 @@ app.get('/api/:resource', async (req, res) => {
       if (user.role === 'CLIENT') {
         if (resource === 'projects') {
           query.clientId = user.email;
-        } else if (resource === 'tasks' || resource === 'invoices') {
-          const clientProjects = await Project.find({ clientId: user.email });
-          query.projectId = { $in: clientProjects.map(p => p.id) };
+        } else if (resource === 'tasks' || resource === 'invoices' || resource === 'tickets' || resource === 'estimates' || resource === 'expenses') {
+          // Attempt to filter by clientId first if it exists on the schema
+          const model = getModel(resource);
+          const hasClientId = model && model.schema.path('clientId');
+
+          if (hasClientId) {
+            query.clientId = user.email;
+          } else {
+            // Fallback to projectId lookup
+            const clientProjects = await Project.find({ clientId: user.email });
+            query.projectId = { $in: clientProjects.map(p => p.id) };
+          }
         }
       } else {
         // TEAM or custom roles
@@ -700,9 +725,23 @@ app.post('/api/:resource', async (req, res) => {
 
   // Signup Logic
   if (resource === 'users' && !payload.verified) {
+    const requesterRole = req.headers['x-requester-role'];
     const email = payload.email.toLowerCase();
     const existing = await User.findOne({ email });
+
     if (existing) return res.status(409).json({ error: 'User exists' });
+
+    // Admin bypass: allow creating verified users directly
+    if (requesterRole === 'ADMIN') {
+      payload.verified = true;
+      try {
+        const created = await User.create(payload);
+        const { password: _, ...safe } = created.toObject();
+        return res.status(201).json(safe);
+      } catch (err) {
+        return res.status(500).json({ error: err.message });
+      }
+    }
 
     const token = Math.floor(100000 + Math.random() * 900000).toString();
     await Verification.deleteMany({ email });

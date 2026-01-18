@@ -61,21 +61,25 @@ export const api = {
 
   async login(email: string, password: string): Promise<User> {
     try {
-      const users = await safeFetch('/api/users') as any[];
-      const found = users.find(u => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);
-      if (!found) throw new Error('Invalid email or password.');
-      if (found.verified === false) throw new Error('Email not verified. Please check your inbox.');
-      const { password: _, ...userSafe } = found;
-      return userSafe as User;
-    } catch (err) {
-      // fallback to localStorage users
+      const user = await safeFetch('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+      });
+      return user as User;
+    } catch (err: any) {
+      // If server fails or returns error, we only fallback to local storage if it's a network error
+      // but for "Invalid email or password", we should actually throw.
+      if (err.message === 'Invalid email or password' || err.message === 'Email and password required') {
+        throw err;
+      }
+
+      // Legacy fallback for offline/development without backend
       const key = 'avocado_users';
       const raw = localStorage.getItem(key);
       let users = raw ? JSON.parse(raw) : [];
       if (users.length === 0) {
-        // create default admin if none
         const adminEmail = 'thapa.shreeyash790@gmail.com'.toLowerCase();
-        users = [{ id: 'admin-001', name: 'Avocado Admin', email: adminEmail, password: 'helloworld1432', role: UserRole.ADMIN, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${adminEmail}` }];
+        users = [{ id: 'admin-001', name: 'Avocado Admin', email: adminEmail, password: 'helloworld1432', role: UserRole.ADMIN, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${adminEmail}`, verified: true }];
         localStorage.setItem(key, JSON.stringify(users));
       }
       const found = users.find((u: any) => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);

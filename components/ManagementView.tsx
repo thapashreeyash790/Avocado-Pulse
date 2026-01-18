@@ -353,16 +353,32 @@ const InviteModal = ({ onClose, onSave }: any) => {
 };
 
 const ClientModal = ({ onClose, onSave }: any) => {
-  const [data, setData] = useState({ name: '', email: '', company: '' });
+  const [data, setData] = useState({ name: '', email: '', company: '', password: '' });
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
       <div className="relative bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
         <h3 className="text-xl font-bold mb-6 text-black">New Client</h3>
-        <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold mb-4" placeholder="Name" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
-        <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold mb-4" placeholder="Email" value={data.email} onChange={e => setData({ ...data, email: e.target.value })} />
-        <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold mb-6" placeholder="Company" value={data.company} onChange={e => setData({ ...data, company: e.target.value })} />
-        <button onClick={() => { onSave(data); onClose(); }} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold">Create Profile</button>
+        <div className="space-y-4">
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Full Name</label>
+            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder="Name" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Email Address</label>
+            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder="Email" value={data.email} onChange={e => setData({ ...data, email: e.target.value })} />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Company / Organization</label>
+            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder="Company" value={data.company} onChange={e => setData({ ...data, company: e.target.value })} />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Initial Password</label>
+            <input type="password" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder="Password" value={data.password} onChange={e => setData({ ...data, password: e.target.value })} />
+            <p className="text-[10px] text-gray-400 mt-1 ml-1">Client will use this to log in.</p>
+          </div>
+        </div>
+        <button onClick={() => { onSave(data); onClose(); }} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold mt-8 shadow-lg shadow-indigo-100 active:scale-[0.98] transition-all">Create Account & Profile</button>
       </div>
     </div>
   );

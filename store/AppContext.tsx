@@ -785,10 +785,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addClient = async (client: Omit<ClientProfile, 'id'>) => {
+  const addClient = async (client: Omit<ClientProfile, 'id'> & { password?: string }) => {
     try {
-      const created = await api.createClient(client);
+      const { password, ...profileData } = client;
+
+      // 1. Create the User account if password is provided
+      if (password) {
+        await api.signup(profileData.email, password, UserRole.CLIENT, profileData.name);
+        pushNotification(`Created client account for ${profileData.email}`, 'success');
+      }
+
+      // 2. Create the Client Profile
+      const created = await api.createClient(profileData);
       setClients(prev => [...prev, created]);
+      pushNotification(`Client profile created for ${profileData.name}`, 'success');
     } catch (err: any) {
       // fallback to local-only client
       const fallback: ClientProfile = { ...client, id: Math.random().toString(36).substr(2, 9) };
