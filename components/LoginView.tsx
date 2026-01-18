@@ -175,20 +175,23 @@ const LoginView: React.FC<LoginViewProps> = ({ initialIsLogin = true }) => {
 
               {!isLogin && (
                 <div className="animate-in slide-in-from-top duration-300 delay-150">
-                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1 ml-1">Your Job Role / Title</label>
-                  <input
-                    type="text"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all mb-2"
-                    placeholder="e.g. Writer, Designer, Developer"
-                  />
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <button type="button" onClick={() => setRole('Writer' as any)} className={`text-[10px] px-2 py-1 rounded-lg border font-bold transition-all ${role === 'Writer' ? 'bg-green-50 border-green-500 text-green-700' : 'bg-white border-slate-200 text-slate-400'}`}>Writer</button>
-                    <button type="button" onClick={() => setRole('Developer' as any)} className={`text-[10px] px-2 py-1 rounded-lg border font-bold transition-all ${role === 'Developer' ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-white border-slate-200 text-slate-400'}`}>Developer</button>
-                    <button type="button" onClick={() => setRole('Designer' as any)} className={`text-[10px] px-2 py-1 rounded-lg border font-bold transition-all ${role === 'Designer' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-slate-200 text-slate-400'}`}>Designer</button>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1 ml-1">Account Type</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRole(UserRole.TEAM)}
+                      className={`flex-1 py-3 px-4 rounded-xl border-2 font-bold text-sm transition-all ${role === UserRole.TEAM ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 bg-white text-slate-400 hover:border-slate-300'}`}
+                    >
+                      Team Member
+                    </button>
                     {!invitedEmail && (
-                      <button type="button" onClick={() => setRole(UserRole.CLIENT)} className={`text-[10px] px-2 py-1 rounded-lg border font-bold transition-all ${role === UserRole.CLIENT ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-slate-200 text-slate-400'}`}>Client Access</button>
+                      <button
+                        type="button"
+                        onClick={() => setRole(UserRole.CLIENT)}
+                        className={`flex-1 py-3 px-4 rounded-xl border-2 font-bold text-sm transition-all ${role === UserRole.CLIENT ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-400 hover:border-slate-300'}`}
+                      >
+                        Client Account
+                      </button>
                     )}
                   </div>
                 </div>

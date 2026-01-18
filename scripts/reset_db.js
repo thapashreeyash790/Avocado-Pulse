@@ -1,44 +1,38 @@
 const mongoose = require('mongoose');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '../api/.env') });
 
-const connectDB = async () => {
+const resetDB = async () => {
     const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/avocado-pm';
-    console.log('Connecting to:', uri);
-    await mongoose.connect(uri);
-    console.log('Connected.');
-};
+    try {
+        await mongoose.connect(uri);
+        console.log('Connected to MongoDB');
 
-const cleanup = async () => {
-    await connectDB();
+        await mongoose.connection.db.dropDatabase();
+        console.log('Database dropped');
 
-    console.log('Cleaning up database...');
+        // Re-seed Admin
+        const User = mongoose.model('User', new mongoose.Schema({
+            id: String, name: String, email: String, password: String, role: String, verified: Boolean, permissions: Object, createdAt: Date
+        }));
 
-    // 1. Delete all non-admin users
-    const userResult = await mongoose.connection.collection('users').deleteMany({ role: { $ne: 'ADMIN' } });
-    console.log(`Deleted ${userResult.deletedCount} non-admin users.`);
+        await User.create({
+            id: 'admin-001',
+            name: 'Workspace Admin',
+            email: 'avocadoinc790@gmail.com',
+            password: 'admin',
+            role: 'ADMIN',
+            verified: true,
+            permissions: { billing: true, projects: true, timeline: true, management: true, messages: true, docs: true },
+            createdAt: new Date()
+        });
+        console.log('Admin re-seeded: avocadoinc790@gmail.com / admin');
 
-    // 2. Delete all other collections entirely
-    const collections = [
-        'clients', 'projects', 'tasks', 'invoices',
-        'verifications', 'conversations', 'messages',
-        'docs', 'activities'
-    ];
-
-    for (const name of collections) {
-        try {
-            const res = await mongoose.connection.collection(name).deleteMany({});
-            console.log(`Deleted all ${res.deletedCount} documents from ${name}`);
-        } catch (e) {
-            console.log(`Error clearing ${name} (might not exist):`, e.message);
-        }
+        process.exit(0);
+    } catch (err) {
+        console.error('Reset failed:', err);
+        process.exit(1);
     }
-
-    console.log('Cleanup complete. Admin accounts preserved.');
-    process.exit(0);
 };
 
-cleanup().catch(err => {
-    console.error(err);
-    process.exit(1);
-});
+resetDB();

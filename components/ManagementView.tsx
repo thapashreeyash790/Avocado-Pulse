@@ -7,7 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 const ManagementView: React.FC = () => {
   const {
-    projects, clients, team, addProject, addClient, inviteTeamMember, removeTeamMember,
+    projects, clients, team, addProject, addClient, updateClient, inviteTeamMember, removeTeamMember,
     user, updateUser, requestEmailUpdate, confirmEmailUpdate, archiveProject,
     settings, updateSettings, leads, invoices
   } = useApp();
@@ -34,6 +34,7 @@ const ManagementView: React.FC = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [editingClient, setEditingClient] = useState<any>(null);
   const [showFieldModal, setShowFieldModal] = useState(false);
 
   const isInternal = user && (user.role === UserRole.ADMIN || user.role !== UserRole.CLIENT);
@@ -111,12 +112,19 @@ const ManagementView: React.FC = () => {
               <div className="p-6 border-b bg-gray-50/50 flex justify-between items-center"><h3 className="font-bold text-black">Clients</h3></div>
               <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto custom-scrollbar">
                 {clients.map(c => (
-                  <div key={c.id} className="p-4 flex items-center gap-3 hover:bg-slate-50">
-                    <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-xs font-bold">{c.name.charAt(0)}</div>
-                    <div>
-                      <h4 className="font-bold text-sm text-black">{c.name}</h4>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase">{c.company}</p>
+                  <div key={c.id} className="p-4 flex items-center justify-between group hover:bg-slate-50">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-xs font-bold">{c.name.charAt(0)}</div>
+                      <div>
+                        <h4 className="font-bold text-sm text-black">{c.name}</h4>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase">{c.company}</p>
+                      </div>
                     </div>
+                    {isAdmin && (
+                      <button onClick={() => setEditingClient(c)} className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-indigo-600">
+                        <ICONS.Settings className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -276,6 +284,7 @@ const ManagementView: React.FC = () => {
         if (link) setInviteLink(link);
       }} />}
       {inviteLink && <InviteLinkModal link={inviteLink} onClose={() => setInviteLink(null)} />}
+      {editingClient && <ClientModal initialData={editingClient} onClose={() => setEditingClient(null)} onSave={(data: any) => updateClient(editingClient.id, data)} />}
       {editingUser && <ProfileEditModal user={editingUser} currentUser={user} onClose={() => setEditingUser(null)} onSave={updateUser} onRequestEmailUpdate={requestEmailUpdate} onConfirmEmailUpdate={confirmEmailUpdate} />}
       {showFieldModal && (
         <CustomFieldForm
@@ -352,13 +361,20 @@ const InviteModal = ({ onClose, onSave }: any) => {
   );
 };
 
-const ClientModal = ({ onClose, onSave }: any) => {
-  const [data, setData] = useState({ name: '', email: '', company: '', password: '' });
+const ClientModal = ({ onClose, onSave, initialData }: any) => {
+  const [data, setData] = useState({
+    name: initialData?.name || '',
+    email: initialData?.email || '',
+    company: initialData?.company || '',
+    password: ''
+  });
+  const isEdit = !!initialData;
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
       <div className="relative bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
-        <h3 className="text-xl font-bold mb-6 text-black">New Client</h3>
+        <h3 className="text-xl font-bold mb-6 text-black">{isEdit ? 'Edit Client' : 'New Client'}</h3>
         <div className="space-y-4">
           <div>
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Full Name</label>
@@ -373,12 +389,12 @@ const ClientModal = ({ onClose, onSave }: any) => {
             <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder="Company" value={data.company} onChange={e => setData({ ...data, company: e.target.value })} />
           </div>
           <div>
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Initial Password</label>
-            <input type="password" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder="Password" value={data.password} onChange={e => setData({ ...data, password: e.target.value })} />
-            <p className="text-[10px] text-gray-400 mt-1 ml-1">Client will use this to log in.</p>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">{isEdit ? 'New Password (Optional)' : 'Initial Password'}</label>
+            <input type="password" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder={isEdit ? "Leave blank to keep current" : "Password"} value={data.password} onChange={e => setData({ ...data, password: e.target.value })} />
+            {!isEdit && <p className="text-[10px] text-gray-400 mt-1 ml-1">Client will use this to log in.</p>}
           </div>
         </div>
-        <button onClick={() => { onSave(data); onClose(); }} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold mt-8 shadow-lg shadow-indigo-100 active:scale-[0.98] transition-all">Create Account & Profile</button>
+        <button onClick={() => { onSave(data); onClose(); }} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold mt-8 shadow-lg shadow-indigo-100 active:scale-[0.98] transition-all">{isEdit ? 'Update Client' : 'Create Account & Profile'}</button>
       </div>
     </div>
   );
@@ -410,15 +426,34 @@ const ProjectModal = ({ clients, onClose, onSave }: any) => {
 };
 
 const ProfileEditModal = ({ user, currentUser, onClose, onSave, onRequestEmailUpdate, onConfirmEmailUpdate }: any) => {
-  const [data, setData] = useState({ name: user.name, email: user.email, role: user.role });
+  const [data, setData] = useState({ name: user.name, email: user.email, role: user.role, password: '' });
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
       <div className="relative bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
         <h3 className="text-xl font-bold mb-6 text-black">Edit {user.name}</h3>
-        <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold mb-4" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
-        <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold mb-6" value={data.email} readOnly={currentUser.role !== UserRole.ADMIN} onChange={e => setData({ ...data, email: e.target.value })} />
-        <button onClick={() => { onSave(user.id, data); onClose(); }} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold">Update Profile</button>
+        <div className="space-y-4">
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Name</label>
+            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Email</label>
+            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" value={data.email} readOnly={currentUser.role !== UserRole.ADMIN} onChange={e => setData({ ...data, email: e.target.value })} />
+          </div>
+          {currentUser.role === UserRole.ADMIN && (
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">New Password (Optional)</label>
+              <input type="password" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" placeholder="Leave blank to keep current" value={data.password} onChange={e => setData({ ...data, password: e.target.value })} />
+            </div>
+          )}
+        </div>
+        <button onClick={() => {
+          const payload: any = { name: data.name, email: data.email };
+          if (data.password) payload.password = data.password;
+          onSave(user.id, payload);
+          onClose();
+        }} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold mt-6">Update Profile</button>
       </div>
     </div>
   );

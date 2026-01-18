@@ -36,7 +36,8 @@ interface AppContextType {
   approveTask: (taskId: string) => Promise<void>;
   requestChanges: (taskId: string) => Promise<void>;
   addProject: (project: Omit<Project, 'id'>) => Promise<void>;
-  addClient: (client: Omit<ClientProfile, 'id'>) => Promise<void>;
+  addClient: (client: Omit<ClientProfile, 'id'> & { password?: string }) => Promise<void>;
+  updateClient: (id: string, updates: Partial<ClientProfile> & { password?: string }) => Promise<void>;
   generateInvoice: (projectId: string) => Promise<void>;
   payInvoice: (invoiceId: string, amount: number) => Promise<void>;
   updateInvoiceStatus: (invoiceId: string, status: Invoice['status']) => Promise<void>;
@@ -712,6 +713,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateClient = async (id: string, updates: Partial<ClientProfile> & { password?: string }) => {
+    try {
+      const { password, ...profileData } = updates;
+
+      // 1. Update Client Profile
+      const updatedClient = await api.updateResource('clients', id, profileData);
+      setClients(prev => prev.map(c => c.id === id ? updatedClient : c));
+
+      // 2. Update User Account if exists (sync email/name/password)
+      const existingClient = clients.find(c => c.id === id);
+      if (existingClient) {
+        // Find user by OLD email to ensure we update the right one even if email changes
+        const linkedUser = allUsers.find(u => u.email === existingClient.email);
+        if (linkedUser) {
+          const userUpdates: any = {};
+          if (password) userUpdates.password = password;
+          if (profileData.email) userUpdates.email = profileData.email;
+          if (profileData.name) userUpdates.name = profileData.name;
+
+          if (Object.keys(userUpdates).length > 0) {
+            await updateUser(linkedUser.id, userUpdates);
+          }
+        }
+      }
+      pushNotification('Client updated successfully', 'success');
+    } catch (err: any) {
+      pushNotification(`Failed to update client: ${err.message}`, 'error');
+    }
+  };
+
   const generateInvoice = async (projectId: string) => {
     const project = projects.find(p => p.id === projectId);
     if (!project) {
@@ -1354,7 +1385,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       team, allUsers, invitedEmail, invitedRole, inviteToken,
       conversations, activeConversation, messages, docs,
       setTasks, login, signup, logout, updateTaskStatus, addTask, deleteTask, copyTask, addComment,
-      approveTask, requestChanges, addProject, addClient, generateInvoice, payInvoice, updateInvoiceStatus,
+      approveTask, requestChanges, addProject, addClient, updateClient, generateInvoice, payInvoice, updateInvoiceStatus,
       markNotificationsAsRead, dismissNotification, verifyOTP, inviteTeamMember, removeTeamMember, cancelSignup, resendOTP,
       updateUser, requestEmailUpdate, confirmEmailUpdate,
       sendMessage, selectConversation, createConversation, addDoc, shareDoc,
