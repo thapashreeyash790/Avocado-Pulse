@@ -77,6 +77,8 @@ interface AppContextType {
   tickets: SupportTicket[];
   addTicket: (ticket: Omit<SupportTicket, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateTicketStatus: (ticketId: string, status: TicketStatus) => Promise<void>;
+  updateTicket: (ticketId: string, updates: Partial<SupportTicket>) => Promise<void>;
+  deleteTicket: (ticketId: string) => Promise<void>;
   announcements: Announcement[];
   addAnnouncement: (announcement: Omit<Announcement, 'id' | 'createdAt'>) => Promise<void>;
   settings: WorkspaceSettings | null;
@@ -1415,6 +1417,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
+  const updateTicket = useCallback(async (ticketId: string, updates: Partial<SupportTicket>) => {
+    try {
+      const updated = await api.updateResource('tickets', ticketId, { ...updates, updatedAt: new Date().toISOString() });
+      setTickets(prev => prev.map(t => t.id === ticketId ? updated : t));
+      pushNotification('Ticket updated', 'success');
+    } catch (err: any) {
+      pushNotification(`Failed to update ticket: ${err.message}`, 'error');
+    }
+  }, []);
+
+  const deleteTicket = useCallback(async (ticketId: string) => {
+    try {
+      await api.deleteResource('tickets', ticketId);
+      setTickets(prev => prev.filter(t => t.id !== ticketId));
+      pushNotification('Ticket deleted', 'success');
+    } catch (err: any) {
+      pushNotification(`Failed to delete ticket: ${err.message}`, 'error');
+    }
+  }, []);
+
   const addAnnouncement = useCallback(async (announcement: Omit<Announcement, 'id' | 'createdAt'>) => {
     try {
       const created = await api.createResource('announcements', announcement);
@@ -1452,7 +1474,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateTask,
       leads, addLead, updateLead, updateLeadStatus, convertLeadToClient,
       expenses, addExpense, estimates, addEstimate, convertEstimateToInvoice,
-      tickets, addTicket, updateTicketStatus, announcements, addAnnouncement,
+      tickets, addTicket, updateTicketStatus, updateTicket, deleteTicket, announcements, addAnnouncement,
       settings, updateSettings,
       deleteInvoice,
       deleteEstimate,

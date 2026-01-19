@@ -5,8 +5,9 @@ import { ICONS } from '../constants';
 import { UserRole, SupportTicket, TicketStatus, TicketPriority, isInternalRole } from '../types';
 
 const SupportView: React.FC = () => {
-    const { tickets, addTicket, updateTicketStatus, user, clients, projects, allUsers } = useApp();
+    const { tickets, addTicket, updateTicketStatus, updateTicket, deleteTicket, user, clients, projects, allUsers } = useApp();
     const [showNewTicket, setShowNewTicket] = useState(false);
+    const [editingTicket, setEditingTicket] = useState<SupportTicket | null>(null);
     const [filter, setFilter] = useState<TicketStatus | 'ALL'>('ALL');
 
     const filteredTickets = tickets.filter(t => {
@@ -73,10 +74,18 @@ const SupportView: React.FC = () => {
                                         ticket.status === TicketStatus.RESOLVED ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'
                                     }`}>{ticket.status}</span>
 
-                                {isInternal && ticket.status !== TicketStatus.RESOLVED && (
+                                {isInternal && (
                                     <div className="flex gap-2 justify-end">
-                                        <button onClick={() => updateTicketStatus(ticket.id, TicketStatus.IN_PROGRESS)} className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors" title="Mark In Progress"><ICONS.Clock className="w-4 h-4" /></button>
-                                        <button onClick={() => updateTicketStatus(ticket.id, TicketStatus.RESOLVED)} className="p-2 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-colors" title="Resolve"><ICONS.Check className="w-4 h-4" /></button>
+                                        {ticket.status !== TicketStatus.RESOLVED && (
+                                            <>
+                                                <button onClick={() => updateTicketStatus(ticket.id, TicketStatus.IN_PROGRESS)} className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors" title="Mark In Progress"><ICONS.Clock className="w-4 h-4" /></button>
+                                                <button onClick={() => updateTicketStatus(ticket.id, TicketStatus.RESOLVED)} className="p-2 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-colors" title="Resolve"><ICONS.Check className="w-4 h-4" /></button>
+                                            </>
+                                        )}
+                                        <button onClick={() => setEditingTicket(ticket)} className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors" title="Edit details"><ICONS.Edit3 className="w-4 h-4" /></button>
+                                        {user?.role === UserRole.ADMIN && (
+                                            <button onClick={() => { if (confirm('Are you sure you want to delete this ticket?')) deleteTicket(ticket.id); }} className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors" title="Delete"><ICONS.Trash className="w-4 h-4" /></button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -107,6 +116,7 @@ const SupportView: React.FC = () => {
             </div>
 
             {showNewTicket && <NewTicketModal onClose={() => setShowNewTicket(false)} projects={projects.filter(p => p.clientId === user?.id)} onSubmit={addTicket} userId={user?.id || ''} />}
+            {editingTicket && <EditTicketModal ticket={editingTicket} onClose={() => setEditingTicket(null)} projects={projects} onSubmit={updateTicket} />}
         </div>
     );
 };
@@ -140,6 +150,40 @@ const NewTicketModal = ({ onClose, projects, onSubmit, userId }: any) => {
                 <div className="flex gap-3 mt-8">
                     <button type="button" onClick={onClose} className="flex-1 py-4 text-sm font-bold text-gray-500 uppercase tracking-widest">Discard</button>
                     <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-100 uppercase tracking-widest">Submit Ticket</button>
+                </div>
+            </form>
+        </div>
+    );
+};
+
+const EditTicketModal = ({ ticket, onClose, projects, onSubmit }: any) => {
+    const [form, setForm] = useState({ subject: ticket.subject, description: ticket.description, priority: ticket.priority, projectId: ticket.projectId || '', status: ticket.status });
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
+            <form onSubmit={(e) => {
+                e.preventDefault();
+                onSubmit(ticket.id, form);
+                onClose();
+            }} className="relative bg-white w-full max-w-xl rounded-3xl p-8 shadow-2xl animate-in zoom-in-95">
+                <h3 className="text-2xl font-bold text-black mb-6">Edit Ticket</h3>
+                <div className="space-y-4">
+                    <input required placeholder="Subject" className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold" value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} />
+                    <textarea required placeholder="Description..." rows={4} className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <select className="p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm outline-none" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as TicketPriority })}>
+                            {Object.values(TicketPriority).map(p => <option key={p} value={p}>{p} PRIORITY</option>)}
+                        </select>
+                        <select className="p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm outline-none" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as TicketStatus })}>
+                            {Object.values(TicketStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                </div>
+                <div className="flex gap-3 mt-8">
+                    <button type="button" onClick={onClose} className="flex-1 py-4 text-sm font-bold text-gray-500 uppercase tracking-widest">Cancel</button>
+                    <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-100 uppercase tracking-widest">Save Changes</button>
                 </div>
             </form>
         </div>
