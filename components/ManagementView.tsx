@@ -7,7 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 const ManagementView: React.FC = () => {
   const {
-    projects, clients, team, addProject, addClient, updateClient, inviteTeamMember, removeTeamMember,
+    projects, clients, team, addProject, updateProject, addClient, updateClient, inviteTeamMember, removeTeamMember,
     user, updateUser, requestEmailUpdate, confirmEmailUpdate, archiveProject,
     settings, updateSettings, leads, invoices
   } = useApp();
@@ -35,6 +35,7 @@ const ManagementView: React.FC = () => {
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editingClient, setEditingClient] = useState<any>(null);
+  const [editingProject, setEditingProject] = useState<any>(null);
   const [showFieldModal, setShowFieldModal] = useState(false);
 
   const isInternal = user && (user.role === UserRole.ADMIN || user.role !== UserRole.CLIENT);
@@ -100,7 +101,14 @@ const ManagementView: React.FC = () => {
                       <p className="text-[10px] text-gray-500 font-medium">Budget: {p.currency} {p.budget.toLocaleString()}</p>
                     </div>
                     {p.status !== 'ARCHIVED' && (
-                      <button onClick={() => archiveProject(p.id)} className="p-2 text-slate-300 hover:text-amber-500"><ICONS.Archive className="w-4 h-4" /></button>
+                      <div className="flex gap-1">
+                        {isAdmin && (
+                          <button onClick={() => setEditingProject(p)} className="p-2 text-slate-300 hover:text-indigo-600 rounded-full hover:bg-indigo-50 transition-colors" title="Edit Project">
+                            <ICONS.Settings className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button onClick={() => archiveProject(p.id)} className="p-2 text-slate-300 hover:text-amber-500"><ICONS.Archive className="w-4 h-4" /></button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -278,7 +286,9 @@ const ManagementView: React.FC = () => {
       )}
 
       {showClientModal && <ClientModal onClose={() => setShowClientModal(false)} onSave={addClient} />}
+      {showClientModal && <ClientModal onClose={() => setShowClientModal(false)} onSave={addClient} />}
       {showProjectModal && <ProjectModal clients={clients} onClose={() => setShowProjectModal(false)} onSave={addProject} />}
+      {editingProject && <ProjectModal clients={clients} initialData={editingProject} onClose={() => setEditingProject(null)} onSave={(data: any) => updateProject(editingProject.id, data)} />}
       {showInviteModal && <InviteModal onClose={() => setShowInviteModal(false)} onSave={async (n: string, e: string, r: string, p: any, pwd?: string) => {
         const link = await inviteTeamMember(n, e, r, p, pwd);
         if (link) setInviteLink(link);
@@ -453,14 +463,23 @@ const ClientModal = ({ onClose, onSave, initialData }: any) => {
   );
 };
 
-const ProjectModal = ({ clients, onClose, onSave }: any) => {
+const ProjectModal = ({ clients, onClose, onSave, initialData }: any) => {
   const { team } = useApp();
-  const [data, setData] = useState({ name: '', clientId: '', budget: 1000, currency: 'NPR', startDate: '', endDate: '', driveLink: '', members: [] as string[] });
+  const [data, setData] = useState({
+    name: initialData?.name || '',
+    clientId: initialData?.clientId || '',
+    budget: initialData?.budget || 1000,
+    currency: initialData?.currency || 'NPR',
+    startDate: initialData?.startDate || '',
+    endDate: initialData?.endDate || '',
+    driveLink: initialData?.driveLink || '',
+    members: (initialData?.members || []) as string[]
+  });
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
       <div className="relative bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
-        <h3 className="text-xl font-bold mb-6 text-black">New Project</h3>
+        <h3 className="text-xl font-bold mb-6 text-black">{initialData ? 'Edit Project' : 'New Project'}</h3>
         <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold mb-4" placeholder="Title" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
         <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold mb-4" placeholder="Drive Folder Link (Optional)" value={(data as any).driveLink || ''} onChange={e => setData({ ...data, driveLink: e.target.value } as any)} />
         <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold mb-4" value={data.clientId} onChange={e => setData({ ...data, clientId: e.target.value })}>
@@ -503,7 +522,7 @@ const ProjectModal = ({ clients, onClose, onSave }: any) => {
           </div>
         </div>
 
-        <button onClick={() => { onSave(data); onClose(); }} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold">Create Project</button>
+        <button onClick={() => { onSave(data); onClose(); }} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold">{initialData ? 'Update Project' : 'Create Project'}</button>
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ const SalesView: React.FC = () => {
   const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>({});
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showAddEstimate, setShowAddEstimate] = useState(false);
+  const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
 
   const getCurrencySymbol = (projectId?: string) => {
     const project = projects.find(p => p.id === projectId);
@@ -111,7 +112,9 @@ const SalesView: React.FC = () => {
                           <td className="px-6 py-4 text-right flex justify-end gap-2">
                             {isInternal && (
                               <>
-                                <button onClick={() => updateInvoiceStatus(inv.id, 'PAID')} className="p-1.5 bg-green-50 text-green-600 rounded hover:bg-green-100"><ICONS.Check className="w-4 h-4" /></button>
+                                <button onClick={() => setPayingInvoice(inv)} className="p-1.5 bg-green-50 text-green-600 rounded hover:bg-green-100 mr-2" title="Record Payment">
+                                  <span className="text-[10px] font-bold px-1">$</span>
+                                </button>
                                 <button onClick={() => deleteInvoice(inv.id)} className="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100"><ICONS.X className="w-4 h-4" /></button>
                               </>
                             )}
@@ -296,6 +299,13 @@ const SalesView: React.FC = () => {
 
       {showAddExpense && <AddExpenseModal onClose={() => setShowAddExpense(false)} projects={projects} onSave={addExpense} />}
       {showAddEstimate && <AddEstimateModal onClose={() => setShowAddEstimate(false)} clients={clients} projects={projects} onSave={addEstimate} />}
+      {payingInvoice && <PaymentModal invoice={payingInvoice} onClose={() => setPayingInvoice(null)} onSave={async (amount: number, notes?: string) => {
+        await payInvoice(payingInvoice.id, amount); // Using existing payInvoice which likely handles partials or we update logic.
+        // Wait, AppContext payInvoice (lines 821-832) handles addition! 
+        // const newPaid = Math.min(inv.paidAmount + payAmount, inv.amount);
+        // Correct.
+        setPayingInvoice(null);
+      }} />}
     </div>
   );
 };
@@ -377,6 +387,54 @@ const AddEstimateModal = ({ onClose, clients, projects, onSave }: any) => {
         <div className="flex gap-3 mt-8">
           <button onClick={onClose} className="flex-1 py-3 text-sm font-bold text-gray-500">Discard</button>
           <button onClick={() => { onSave({ clientId, items, total, date: new Date().toISOString(), status: 'DRAFT' }); onClose(); }} className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-bold text-sm shadow-xl shadow-indigo-100">Finalize Estimate</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PaymentModal = ({ invoice, onClose, onSave }: any) => {
+  const [amount, setAmount] = useState('');
+  const [notes, setNotes] = useState('');
+  const max = invoice.amount - (invoice.paidAmount || 0);
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
+      <div className="relative bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95">
+        <h3 className="text-xl font-bold mb-4 text-black">Record Payment</h3>
+        <p className="text-xs text-gray-500 mb-6">Enter the amount received for Invoice #{invoice.id}.</p>
+
+        <div className="mb-4">
+          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Amount Due</label>
+          <div className="text-2xl font-black text-black">रु{max.toLocaleString()}</div>
+        </div>
+
+        <input
+          autoFocus
+          type="number"
+          max={max}
+          className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl font-bold text-lg mb-4 text-black"
+          placeholder="Amount"
+          value={amount}
+          onChange={e => setAmount(e.target.value)}
+        />
+
+        <input
+          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-medium text-sm mb-6 text-black"
+          placeholder="Notes (Optional)"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+        />
+
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-bold text-sm">Cancel</button>
+          <button
+            disabled={!amount || Number(amount) <= 0 || Number(amount) > max}
+            onClick={() => onSave(Number(amount), notes)}
+            className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm disabled:opacity-50 shadow-lg shadow-emerald-200">
+            Record Payment
+          </button>
         </div>
       </div>
     </div>

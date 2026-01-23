@@ -36,6 +36,7 @@ interface AppContextType {
   approveTask: (taskId: string) => Promise<void>;
   requestChanges: (taskId: string) => Promise<void>;
   addProject: (project: Omit<Project, 'id'>) => Promise<void>;
+  updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
   addClient: (client: Omit<ClientProfile, 'id'> & { password?: string }) => Promise<void>;
   updateClient: (id: string, updates: Partial<ClientProfile> & { password?: string }) => Promise<void>;
   generateInvoice: (projectId: string) => Promise<void>;
@@ -728,6 +729,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setProjects(prev => [...prev, fallback]);
       pushNotification(`Sync failed: Project created locally only.`, 'warning');
       logActivity(`created project "${fallback.name}" (local)`, 'CREATE');
+    }
+  };
+
+  const updateProject = async (id: string, updates: Partial<Project>) => {
+    try {
+      const updated = await api.updateResource('projects', id, updates);
+      setProjects(prev => prev.map(p => p.id === id ? updated : p));
+      pushNotification('Project updated successfully', 'success');
+      logActivity(`updated project "${updated.name}"`, 'UPDATE');
+    } catch (err: any) {
+      pushNotification(`Failed to update project: ${err.message}`, 'error');
     }
   };
 

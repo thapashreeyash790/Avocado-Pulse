@@ -600,6 +600,31 @@ app.post('/api/genai/checklist', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Payment Route
+app.post('/api/invoices/:id/payment', async (req, res) => {
+  const { id } = req.params;
+  const { amount, notes } = req.body;
+
+  try {
+    const invoice = await Invoice.findOne({ id });
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+
+    const newPaidAmount = (invoice.paidAmount || 0) + Number(amount);
+    const newStatus = newPaidAmount >= invoice.amount ? 'PAID' : 'SENT'; // Logic: Partial payment keeps it SENT (or PARTIAL if we had it), full makes PAID.
+
+    await Invoice.findOneAndUpdate({ id }, {
+      paidAmount: newPaidAmount,
+      status: newStatus
+    });
+
+    // Log payment? Could add expenses/revenue log here if needed.
+
+    res.json({ success: true, paidAmount: newPaidAmount, status: newStatus });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- GENERIC CRUD ROUTES ---
 
 app.get('/api/:resource', async (req, res) => {
