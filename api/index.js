@@ -667,6 +667,7 @@ app.get('/api/:resource', async (req, res) => {
           if (perms.projects === false) return res.status(403).json({ error: 'Access denied' });
           // Show projects where user is a member OR (optional) projects they created if we tracked creatorId? 
           // For now, strict membership.
+          console.log(`[API] Filtering projects for ${requesterId} (Team). Checking members array.`);
           query.members = requesterId;
         }
 
