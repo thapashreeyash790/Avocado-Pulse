@@ -189,6 +189,11 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
               )}
             </div>
             <div className="flex items-center gap-2">
+              {task.driveLink && (
+                <a href={task.driveLink} target="_blank" rel="noreferrer" className="p-2.5 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all" title="Open Drive Folder">
+                  <ICONS.ExternalLink className="w-5 h-5" />
+                </a>
+              )}
               <button onClick={() => toggleBookmark(taskId)} className={`p-2.5 rounded-xl transition-all ${user?.bookmarks?.includes(taskId) ? 'bg-amber-100 text-amber-600' : 'text-slate-400 hover:bg-slate-100'}`}>
                 <ICONS.Bookmark className={`w-5 h-5 ${user?.bookmarks?.includes(taskId) ? 'fill-current' : ''}`} />
               </button>
@@ -207,7 +212,13 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
                 <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                   <ICONS.FileText className="w-3.5 h-3.5" /> Description
                 </h3>
-                {canEdit && !isEditingDescription && <button onClick={() => setIsEditingDescription(true)} className="text-[10px] font-bold text-indigo-600 hover:underline uppercase tracking-wide opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>}
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {canEdit && <button onClick={() => {
+                    const link = prompt("Enter Drive Link:", task.driveLink || "");
+                    if (link !== null) updateTask(taskId, { driveLink: link });
+                  }} className="text-[10px] font-bold text-blue-600 hover:underline uppercase tracking-wide">Link Drive</button>}
+                  {canEdit && !isEditingDescription && <button onClick={() => setIsEditingDescription(true)} className="text-[10px] font-bold text-indigo-600 hover:underline uppercase tracking-wide">Edit</button>}
+                </div>
               </div>
               {isEditingDescription ? (
                 <div className="space-y-3 animate-in fade-in slide-in-from-top-2">

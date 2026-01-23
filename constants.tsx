@@ -49,7 +49,8 @@ import {
   Phone,
   Link,
   Upload,
-  Award
+  Award,
+  ExternalLink
 } from 'lucide-react';
 
 export const ICONS = {
@@ -101,7 +102,8 @@ export const ICONS = {
   Phone,
   Link,
   Upload,
-  Award
+  Award,
+  ExternalLink
 };
 
 export const PRIORITY_COLORS = {

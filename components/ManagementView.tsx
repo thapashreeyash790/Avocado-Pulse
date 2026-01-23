@@ -338,19 +338,70 @@ const CustomFieldForm = ({ onClose, onSubmit }: any) => {
 
 // Re-including these from the original file to maintain functionality
 const InviteModal = ({ onClose, onSave }: any) => {
-  const [data, setData] = useState({ name: '', email: '', role: UserRole.TEAM, permissions: { billing: true, projects: true, timeline: true, management: false, messages: true, docs: true } });
+  const [data, setData] = useState({
+    name: '',
+    email: '',
+    role: UserRole.TEAM,
+    permissions: {
+      billing: true,
+      projects: true,
+      timeline: true,
+      management: false,
+      messages: true,
+      docs: true
+    }
+  });
+
+  const togglePermission = (key: string) => {
+    setData(prev => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [key]: !prev.permissions[key as keyof typeof prev.permissions]
+      }
+    }));
+  };
+
+  const permissionLabels: any = {
+    billing: 'View Financials (Invoices/Estimates)',
+    projects: 'Access Application Projects',
+    timeline: 'View Activity Timeline',
+    management: 'Manage Team & Settings',
+    messages: 'Access Chat & Messages',
+    docs: 'View Documents & Files'
+  };
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
-      <div className="relative bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
+      <div className="relative bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
         <h3 className="text-2xl font-black mb-6 text-black">Invite Team Member</h3>
         <div className="space-y-4">
           <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder="Full Name" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
           <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder="Email" value={data.email} onChange={e => setData({ ...data, email: e.target.value })} />
-          <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" value={data.role} onChange={e => setData({ ...data, role: e.target.value as UserRole })}>
-            <option value={UserRole.TEAM}>Team Member</option>
-            <option value={UserRole.ADMIN}>Administrator</option>
-          </select>
+
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2 px-1">Role</label>
+            <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" value={data.role} onChange={e => setData({ ...data, role: e.target.value as UserRole })}>
+              <option value={UserRole.TEAM}>Team Member</option>
+              <option value={UserRole.ADMIN}>Administrator</option>
+            </select>
+          </div>
+
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 mt-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">Access Rights</label>
+            <div className="grid grid-cols-1 gap-3">
+              {Object.keys(data.permissions).map((key) => (
+                <label key={key} className="flex items-center justify-between p-2 hover:bg-white rounded-lg transition-colors cursor-pointer group">
+                  <span className="text-sm font-bold text-slate-700">{permissionLabels[key] || key}</span>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${data.permissions[key as keyof typeof data.permissions] ? 'bg-indigo-600' : 'bg-slate-200'}`} onClick={(e) => { e.preventDefault(); togglePermission(key); }}>
+                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${data.permissions[key as keyof typeof data.permissions] ? 'left-6' : 'left-1'}`} />
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-6">
             <button onClick={onClose} className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm">Cancel</button>
             <button onClick={() => { onSave(data.name, data.email, data.role, data.permissions); onClose(); }} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl font-bold text-sm">Invite</button>
@@ -401,13 +452,14 @@ const ClientModal = ({ onClose, onSave, initialData }: any) => {
 };
 
 const ProjectModal = ({ clients, onClose, onSave }: any) => {
-  const [data, setData] = useState({ name: '', clientId: '', budget: 1000, currency: 'NPR', startDate: '', endDate: '' });
+  const [data, setData] = useState({ name: '', clientId: '', budget: 1000, currency: 'NPR', startDate: '', endDate: '', driveLink: '' });
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
       <div className="relative bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
         <h3 className="text-xl font-bold mb-6 text-black">New Project</h3>
         <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold mb-4" placeholder="Title" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
+        <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold mb-4" placeholder="Drive Folder Link (Optional)" value={(data as any).driveLink || ''} onChange={e => setData({ ...data, driveLink: e.target.value } as any)} />
         <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold mb-4" value={data.clientId} onChange={e => setData({ ...data, clientId: e.target.value })}>
           <option value="">Select Client...</option>
           {clients.map((c: any) => <option key={c.id} value={c.email}>{c.name}</option>)}
@@ -426,11 +478,44 @@ const ProjectModal = ({ clients, onClose, onSave }: any) => {
 };
 
 const ProfileEditModal = ({ user, currentUser, onClose, onSave, onRequestEmailUpdate, onConfirmEmailUpdate }: any) => {
-  const [data, setData] = useState({ name: user.name, email: user.email, role: user.role, password: '' });
+  const [data, setData] = useState({
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    password: '',
+    permissions: user.permissions || {
+      billing: true,
+      projects: true,
+      timeline: true,
+      management: false,
+      messages: true,
+      docs: true
+    }
+  });
+
+  const togglePermission = (key: string) => {
+    setData(prev => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [key]: !prev.permissions[key as keyof typeof prev.permissions]
+      }
+    }));
+  };
+
+  const permissionLabels: any = {
+    billing: 'View Financials',
+    projects: 'Access Projects',
+    timeline: 'View Timeline',
+    management: 'Manage Team',
+    messages: 'Chat Access',
+    docs: 'Documents'
+  };
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
-      <div className="relative bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
+      <div className="relative bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
         <h3 className="text-xl font-bold mb-6 text-black">Edit {user.name}</h3>
         <div className="space-y-4">
           <div>
@@ -441,15 +526,35 @@ const ProfileEditModal = ({ user, currentUser, onClose, onSave, onRequestEmailUp
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Email</label>
             <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" value={data.email} readOnly={currentUser.role !== UserRole.ADMIN} onChange={e => setData({ ...data, email: e.target.value })} />
           </div>
+
           {currentUser.role === UserRole.ADMIN && (
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">New Password (Optional)</label>
-              <input type="password" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" placeholder="Leave blank to keep current" value={data.password} onChange={e => setData({ ...data, password: e.target.value })} />
-            </div>
+            <>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">New Password (Optional)</label>
+                <input type="password" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" placeholder="Leave blank to keep current" value={data.password} onChange={e => setData({ ...data, password: e.target.value })} />
+              </div>
+
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 mt-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">User Access Control</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.keys(data.permissions).map((key) => (
+                    <label key={key} className="flex items-center justify-between p-2 hover:bg-white rounded-lg transition-colors cursor-pointer text-xs font-bold text-slate-600">
+                      <span>{permissionLabels[key] || key}</span>
+                      <input
+                        type="checkbox"
+                        className="accent-indigo-600 w-4 h-4 rounded-md"
+                        checked={data.permissions[key as keyof typeof data.permissions]}
+                        onChange={() => togglePermission(key)}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </div>
         <button onClick={() => {
-          const payload: any = { name: data.name, email: data.email };
+          const payload: any = { name: data.name, email: data.email, permissions: data.permissions };
           if (data.password) payload.password = data.password;
           onSave(user.id, payload);
           onClose();

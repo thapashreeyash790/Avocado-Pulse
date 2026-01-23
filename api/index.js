@@ -80,6 +80,7 @@ const projectSchema = new mongoose.Schema({
   endDate: Date,
   status: { type: String, enum: ['ACTIVE', 'ARCHIVED'], default: 'ACTIVE' },
   members: { type: [String], default: [] },
+  driveLink: String,
   customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
 });
 
@@ -101,6 +102,7 @@ const taskSchema = new mongoose.Schema({
   approvalStatus: { type: String, enum: ['PENDING', 'APPROVED', 'CHANGES_REQUESTED'] },
   trackTime: { type: Boolean, default: true },
   totalTimeLogged: { type: Number, default: 0 },
+  driveLink: String,
   customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
 });
 

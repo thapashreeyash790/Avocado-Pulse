@@ -126,8 +126,11 @@ const AddLeadModal = ({ onClose, onSave, fieldDefs }: any) => {
                 <div className="space-y-4">
                     <input required placeholder="Contact Name" className="w-full p-3 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600 text-slate-900 dark:text-white" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                     <input required type="email" placeholder="Email Address" className="w-full p-3 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600 text-slate-900 dark:text-white" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-                    <input placeholder="Phone Number" className="w-full p-3 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600 text-slate-900 dark:text-white" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
-                    <input placeholder="Company Name" className="w-full p-3 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600 text-slate-900 dark:text-white" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} />
+                    <div className="grid grid-cols-2 gap-4">
+                        <input placeholder="Phone Number" className="w-full p-3 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600 text-slate-900 dark:text-white" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+                        <input placeholder="Company Name" className="w-full p-3 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600 text-slate-900 dark:text-white" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} />
+                    </div>
+                    <input placeholder="Google Drive Folder Link (Optional)" className="w-full p-3 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600 text-slate-900 dark:text-white" value={(form as any).driveLink || ''} onChange={e => setForm({ ...form, driveLink: e.target.value } as any)} />
 
                     {fieldDefs.map((def: CustomFieldDefinition) => (
                         <div key={def.id}>
@@ -181,6 +184,20 @@ const LeadDetailsModal = ({ lead, onClose, onConvert, onUpdateStatus, onUpdate, 
                         <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full"><ICONS.Plus className="w-5 h-5 rotate-45 text-gray-400" /></button>
                     </div>
                 </div>
+                {lead.driveLink && (
+                    <div className="px-8 pt-6 pb-0">
+                        <a href={lead.driveLink} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all group">
+                            <div className="p-2 bg-white dark:bg-blue-900 rounded-lg text-blue-600 dark:text-blue-300">
+                                <ICONS.ExternalLink className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-blue-900 dark:text-blue-100">Google Drive Folder</h4>
+                                <p className="text-[10px] text-blue-600 dark:text-blue-300 font-medium">Access attached documents and assets</p>
+                            </div>
+                            <ICONS.ArrowRight className="w-4 h-4 text-blue-400 ml-auto group-hover:translate-x-1 transition-transform" />
+                        </a>
+                    </div>
+                )}
                 <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-6">
                         <div>

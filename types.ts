@@ -107,6 +107,7 @@ export interface Project {
   endDate: string;
   status: 'ACTIVE' | 'ARCHIVED';
   members: string[]; // User IDs
+  driveLink?: string;
   customFields?: Record<string, any>;
 }
 
@@ -176,6 +177,7 @@ export interface Lead {
   assignedTo?: string; // User ID
   createdAt: string;
   updatedAt: string;
+  driveLink?: string;
   customFields?: Record<string, any>;
 }
 
@@ -275,6 +277,7 @@ export interface Task {
   files: string[];
   trackTime?: boolean;
   totalTimeLogged?: number; // minutes
+  driveLink?: string;
   customFields?: Record<string, any>;
 }
 
