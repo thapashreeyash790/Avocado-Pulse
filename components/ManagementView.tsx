@@ -515,39 +515,54 @@ const ProfileEditModal = ({ user, currentUser, onClose, onSave, onRequestEmailUp
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
-      <div className="relative bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
+      <div className="relative bg-white w-full max-w-lg rounded-[2rem] p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
         <h3 className="text-xl font-bold mb-6 text-black">Edit {user.name}</h3>
-        <div className="space-y-4">
-          <div>
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Name</label>
-            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
-          </div>
-          <div>
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Email</label>
-            <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" value={data.email} readOnly={currentUser.role !== UserRole.ADMIN} onChange={e => setData({ ...data, email: e.target.value })} />
+        <div className="space-y-6">
+
+          {/* Account Info Section */}
+          <div className="space-y-4">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 w-full block pb-1">Account Information</label>
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Full Name</label>
+              <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">Email Address</label>
+              <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" value={data.email} readOnly={currentUser.role !== UserRole.ADMIN} onChange={e => setData({ ...data, email: e.target.value })} />
+            </div>
           </div>
 
           {currentUser.role === UserRole.ADMIN && (
             <>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 ml-1">New Password (Optional)</label>
-                <input type="password" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" placeholder="Leave blank to keep current" value={data.password} onChange={e => setData({ ...data, password: e.target.value })} />
+              {/* Security Section */}
+              <div className="space-y-4">
+                <label className="text-[10px] font-black text-rose-400 uppercase tracking-widest border-b border-rose-100 w-full block pb-1 flex items-center gap-2">
+                  <ICONS.Shield className="w-3 h-3" /> Security
+                </label>
+                <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100">
+                  <label className="text-[10px] font-bold text-rose-400 uppercase tracking-widest block mb-1 ml-1">Set New Password</label>
+                  <input type="password" className="w-full p-3.5 bg-white border border-rose-100 rounded-xl font-bold text-sm text-black placeholder-rose-200 focus:border-rose-300 focus:ring-rose-200" placeholder="Enter new password to reset" value={data.password} onChange={e => setData({ ...data, password: e.target.value })} />
+                  <p className="text-[10px] text-rose-400 font-medium mt-2 ml-1 flex items-center gap-1"><ICONS.AlertCircle className="w-3 h-3" /> Only set this if the user has forgotten their password.</p>
+                </div>
               </div>
 
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 mt-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">User Access Control</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.keys(data.permissions).map((key) => (
-                    <label key={key} className="flex items-center justify-between p-2 hover:bg-white rounded-lg transition-colors cursor-pointer text-xs font-bold text-slate-600">
-                      <span>{permissionLabels[key] || key}</span>
-                      <input
-                        type="checkbox"
-                        className="accent-indigo-600 w-4 h-4 rounded-md"
-                        checked={data.permissions[key as keyof typeof data.permissions]}
-                        onChange={() => togglePermission(key)}
-                      />
-                    </label>
-                  ))}
+              {/* Permissions Section */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 w-full block pb-1">Access Control</label>
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <div className="grid grid-cols-2 gap-3">
+                    {Object.keys(data.permissions).map((key) => (
+                      <label key={key} className="flex items-center justify-between p-2 hover:bg-white rounded-lg transition-colors cursor-pointer text-xs font-bold text-slate-600">
+                        <span>{permissionLabels[key] || key}</span>
+                        <input
+                          type="checkbox"
+                          className="accent-indigo-600 w-4 h-4 rounded-md"
+                          checked={data.permissions[key as keyof typeof data.permissions]}
+                          onChange={() => togglePermission(key)}
+                        />
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
             </>
@@ -558,7 +573,7 @@ const ProfileEditModal = ({ user, currentUser, onClose, onSave, onRequestEmailUp
           if (data.password) payload.password = data.password;
           onSave(user.id, payload);
           onClose();
-        }} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold mt-6">Update Profile</button>
+        }} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold mt-8 shadow-lg hover:bg-black transition-all">Update Profile</button>
       </div>
     </div>
   );

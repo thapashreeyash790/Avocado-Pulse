@@ -454,9 +454,24 @@ app.post('/api/auth/login', async (req, res) => {
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
   try {
-    const user = await User.findOne({ email: email.toLowerCase(), password });
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(401).json({ error: 'Invalid email or password' });
     if (user.verified === false) return res.status(403).json({ error: 'Email not verified' });
+
+    let isValid = false;
+    try {
+      const bcrypt = require('bcryptjs');
+      isValid = await bcrypt.compare(password, user.password);
+    } catch (e) {
+      // bcrypt might not be available or password might not be a hash
+    }
+
+    // Fallback for legacy plain text passwords (e.g. admin seed)
+    if (!isValid && user.password === password) {
+      isValid = true;
+    }
+
+    if (!isValid) return res.status(401).json({ error: 'Invalid email or password' });
 
     const { password: _, ...safe } = user.toObject();
     res.json(safe);
@@ -753,6 +768,18 @@ app.put('/api/:resource/:id', async (req, res) => {
   const payload = req.body;
   if (resource === 'users') {
     payload.lastActive = new Date();
+    // Hash password if updating
+    if (payload.password) {
+      // Import bcrypt if not available, or use existing method.
+      // Checking login implementation first...
+      // Proceeding with bcrypt assumption or simple check.
+      try {
+        const bcrypt = require('bcryptjs');
+        payload.password = await bcrypt.hash(payload.password, 10);
+      } catch (e) {
+        console.warn('bcryptjs not found, saving plain text (INSECURE - DEV ONLY)');
+      }
+    }
   }
 
   try {

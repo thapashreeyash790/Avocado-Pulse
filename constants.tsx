@@ -50,7 +50,8 @@ import {
   Link,
   Upload,
   Award,
-  ExternalLink
+  ExternalLink,
+  Shield
 } from 'lucide-react';
 
 export const ICONS = {
@@ -103,7 +104,8 @@ export const ICONS = {
   Link,
   Upload,
   Award,
-  ExternalLink
+  ExternalLink,
+  Shield
 };
 
 export const PRIORITY_COLORS = {
