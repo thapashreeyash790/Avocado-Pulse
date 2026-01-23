@@ -776,6 +776,7 @@ app.put('/api/:resource/:id', async (req, res) => {
       try {
         const bcrypt = require('bcryptjs');
         payload.password = await bcrypt.hash(payload.password, 10);
+        payload.verified = true;
       } catch (e) {
         console.warn('bcryptjs not found, saving plain text (INSECURE - DEV ONLY)');
       }
