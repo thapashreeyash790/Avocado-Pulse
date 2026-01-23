@@ -1477,7 +1477,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       team, allUsers, invitedEmail, invitedRole, inviteToken,
       conversations, activeConversation, messages, docs,
       setTasks, login, signup, logout, updateTaskStatus, addTask, deleteTask, copyTask, addComment,
-      approveTask, requestChanges, addProject, addClient, updateClient, generateInvoice, payInvoice, updateInvoiceStatus,
+      approveTask, requestChanges, addProject, updateProject, addClient, updateClient, generateInvoice, payInvoice, recordPayment, updateInvoiceStatus,
       markNotificationsAsRead, dismissNotification, verifyOTP, inviteTeamMember, removeTeamMember, cancelSignup, resendOTP,
       updateUser, requestEmailUpdate, confirmEmailUpdate,
       sendMessage, selectConversation, createConversation, addDoc, shareDoc,
