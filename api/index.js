@@ -665,16 +665,25 @@ app.get('/api/:resource', async (req, res) => {
         // Force strict project filtering for TEAM members
         if (resource === 'projects') {
           if (perms.projects === false) return res.status(403).json({ error: 'Access denied' });
-          query.$or = [
-            { members: requesterId },
-            { members: { $exists: false } }, // Legacy: public? or migrate. Safest to assume assigned only.
-            // Actually, let's include legacy 'accessibleProjects' if used?
-            // But new design prefers 'members' on Project.
-            { members: { $size: 0 } } // Default visible if no members? Or restrict? 
-            // Plan says: Whitelist. "Can view only assigned projects".
-          ];
-          // Correction: Strict whitelist. ONLY where members include ID.
+          // Show projects where user is a member OR (optional) projects they created if we tracked creatorId? 
+          // For now, strict membership.
           query.members = requesterId;
+        }
+
+        // Filter TASKS based on accessible projects
+        if (resource === 'tasks') {
+          if (perms.timeline === false) return res.status(403).json({ error: 'Access denied' });
+
+          // 1. Get projects this user is part of
+          const myProjects = await Project.find({ members: requesterId }, 'id');
+          const myProjectIds = myProjects.map(p => p.id);
+
+          // 2. Return tasks that are in those projects OR assigned to this user specifically
+          query.$or = [
+            { projectId: { $in: myProjectIds } },
+            { assignees: requesterId },
+            { assignees: { $in: [requesterId] } } // Handle array if schema differs
+          ];
         }
 
         // Module-level blocking
