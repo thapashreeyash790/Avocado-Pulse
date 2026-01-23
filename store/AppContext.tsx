@@ -47,7 +47,7 @@ interface AppContextType {
   updateUser: (id: string, payload: Partial<User>) => Promise<void>;
   requestEmailUpdate: (userId: string, newEmail: string) => Promise<void>;
   confirmEmailUpdate: (token: string) => Promise<void>;
-  inviteTeamMember: (name: string, email: string, role: string, permissions?: any) => Promise<string | void>;
+  inviteTeamMember: (name: string, email: string, role: string, permissions?: any, password?: string) => Promise<string | void>;
   removeTeamMember: (id: string) => Promise<void>;
   cancelSignup: (email: string) => Promise<void>;
   resendOTP: (email: string) => Promise<void>;
@@ -630,9 +630,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const inviteTeamMember = async (name: string, email: string, role: string, permissions?: any) => {
+  const inviteTeamMember = async (name: string, email: string, role: string, permissions?: any, password?: string) => {
     try {
-      const res = await api.inviteTeamMember(name, email, role, permissions);
+      const res = await api.inviteTeamMember(name, email, role, permissions, password);
       if (res && res.inviteLink) {
         pushNotification(`Invite created. Email failed, use the link provided.`, 'warning');
         logActivity(`invited ${name} (manual link)`, 'CREATE');

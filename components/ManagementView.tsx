@@ -279,8 +279,8 @@ const ManagementView: React.FC = () => {
 
       {showClientModal && <ClientModal onClose={() => setShowClientModal(false)} onSave={addClient} />}
       {showProjectModal && <ProjectModal clients={clients} onClose={() => setShowProjectModal(false)} onSave={addProject} />}
-      {showInviteModal && <InviteModal onClose={() => setShowInviteModal(false)} onSave={async (n: string, e: string, r: string, p: any) => {
-        const link = await inviteTeamMember(n, e, r, p);
+      {showInviteModal && <InviteModal onClose={() => setShowInviteModal(false)} onSave={async (n: string, e: string, r: string, p: any, pwd?: string) => {
+        const link = await inviteTeamMember(n, e, r, p, pwd);
         if (link) setInviteLink(link);
       }} />}
       {inviteLink && <InviteLinkModal link={inviteLink} onClose={() => setInviteLink(null)} />}
@@ -349,7 +349,8 @@ const InviteModal = ({ onClose, onSave }: any) => {
       management: false,
       messages: true,
       docs: true
-    }
+    },
+    password: ''
   });
 
   const togglePermission = (key: string) => {
@@ -379,6 +380,7 @@ const InviteModal = ({ onClose, onSave }: any) => {
         <div className="space-y-4">
           <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder="Full Name" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
           <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder="Email" value={data.email} onChange={e => setData({ ...data, email: e.target.value })} />
+          <input className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-black" placeholder="Initial Password (Optional)" value={data.password} onChange={e => setData({ ...data, password: e.target.value })} />
 
           <div>
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2 px-1">Role</label>
@@ -404,7 +406,7 @@ const InviteModal = ({ onClose, onSave }: any) => {
 
           <div className="flex gap-3 pt-6">
             <button onClick={onClose} className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm">Cancel</button>
-            <button onClick={() => { onSave(data.name, data.email, data.role, data.permissions); onClose(); }} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl font-bold text-sm">Invite</button>
+            <button onClick={() => { onSave(data.name, data.email, data.role, data.permissions, data.password); onClose(); }} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl font-bold text-sm">Invite</button>
           </div>
         </div>
       </div>

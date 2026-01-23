@@ -55,8 +55,8 @@ export const api = {
     }
   },
 
-  async inviteTeamMember(name: string, email: string, role: string, permissions?: any): Promise<any> {
-    return await safeFetch('/api/team/invite', { method: 'POST', body: JSON.stringify({ name, email, role, permissions }) });
+  async inviteTeamMember(name: string, email: string, role: string, permissions?: any, password?: string): Promise<any> {
+    return await safeFetch('/api/team/invite', { method: 'POST', body: JSON.stringify({ name, email, role, permissions, password }) });
   },
 
   async login(email: string, password: string): Promise<User> {

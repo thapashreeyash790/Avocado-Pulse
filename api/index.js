@@ -420,6 +420,14 @@ app.post('/api/team/invite', async (req, res) => {
     permissions: permissions || { billing: true, timeline: true, projects: true, management: false }
   });
 
+  if (req.body.password) {
+    try {
+      const bcrypt = require('bcryptjs');
+      const hashed = await bcrypt.hash(req.body.password, 10);
+      await User.findOneAndUpdate({ id: userId }, { password: hashed, verified: true });
+    } catch (e) { console.warn('Bcrypt failed', e); }
+  }
+
   const verifyToken = Math.random().toString(36).substr(2, 12);
   await Verification.deleteMany({ email: lowerEmail });
   await Verification.create({
