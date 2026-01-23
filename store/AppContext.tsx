@@ -819,15 +819,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const payInvoice = async (invoiceId: string, payAmount: number) => {
+    return recordPayment(invoiceId, payAmount);
+  };
+
+  const recordPayment = async (invoiceId: string, amount: number) => {
     try {
-      const inv = invoices.find(i => i.id === invoiceId);
-      if (!inv) return;
-      const newPaid = Math.min(inv.paidAmount + payAmount, inv.amount);
-      const status = newPaid >= inv.amount ? 'PAID' : 'PENDING';
-      const updated = await api.updateInvoice(invoiceId, { paidAmount: newPaid, status });
-      setInvoices(prev => prev.map(i => i.id === invoiceId ? updated : i));
+      const res = await api.recordPayment(invoiceId, amount);
+
+      setInvoices(prev => prev.map(inv => {
+        if (inv.id === invoiceId) {
+          return { ...inv, paidAmount: res.paidAmount, status: res.status };
+        }
+        return inv;
+      }));
+      pushNotification(`Payment recorded: ${amount}`, 'success');
+      logActivity(`recorded payment of ${amount}`, 'UPDATE');
     } catch (err: any) {
-      pushNotification(`Payment failed: ${err.message || err}`, 'warning');
+      pushNotification(`Failed to record payment: ${err.message}`, 'error');
     }
   };
 

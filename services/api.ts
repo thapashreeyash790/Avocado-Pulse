@@ -150,6 +150,9 @@ export const api = {
   async createInvoice(invoice: any) { return this.createResource('invoices', invoice); },
   async updateInvoice(id: string, payload: any) { return this.updateResource('invoices', id, payload); },
   async updateUser(id: string, payload: any) { return this.updateResource('users', id, payload); },
+  async recordPayment(invoiceId: string, amount: number, notes?: string) {
+    return safeFetch(`/api/invoices/${invoiceId}/payment`, { method: 'POST', body: JSON.stringify({ amount, notes }) });
+  },
 
   // Chat
   async fetchConversations(): Promise<any[]> { return this.fetchResource('conversations'); },
