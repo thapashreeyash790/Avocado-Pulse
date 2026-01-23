@@ -454,7 +454,8 @@ const ClientModal = ({ onClose, onSave, initialData }: any) => {
 };
 
 const ProjectModal = ({ clients, onClose, onSave }: any) => {
-  const [data, setData] = useState({ name: '', clientId: '', budget: 1000, currency: 'NPR', startDate: '', endDate: '', driveLink: '' });
+  const { team } = useApp();
+  const [data, setData] = useState({ name: '', clientId: '', budget: 1000, currency: 'NPR', startDate: '', endDate: '', driveLink: '', members: [] as string[] });
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}></div>
@@ -466,14 +467,43 @@ const ProjectModal = ({ clients, onClose, onSave }: any) => {
           <option value="">Select Client...</option>
           {clients.map((c: any) => <option key={c.id} value={c.email}>{c.name}</option>)}
         </select>
-        <div className="flex gap-4 mb-6">
+        <div className="flex gap-4 mb-4">
           <input type="number" className="flex-1 p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" value={data.budget} onChange={e => setData({ ...data, budget: Number(e.target.value) })} />
           <select className="w-32 p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" value={data.currency} onChange={e => setData({ ...data, currency: e.target.value })}>
             <option value="NPR">NPR</option>
             <option value="USD">USD</option>
           </select>
         </div>
-        <button onClick={() => { onSave(data); onClose(); }} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold">Assign Project</button>
+
+        <div className="mb-6">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2 px-1">Team Access</label>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 max-h-[150px] overflow-y-auto custom-scrollbar">
+            {team.map((u: any) => (
+              <label key={u.id} className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors">
+                <input
+                  type="checkbox"
+                  className="accent-indigo-600 w-4 h-4"
+                  checked={(data as any).members?.includes(u.id)}
+                  onChange={(e) => {
+                    const current = (data as any).members || [];
+                    const newMembers = e.target.checked
+                      ? [...current, u.id]
+                      : current.filter((id: string) => id !== u.id);
+                    setData({ ...data, members: newMembers } as any);
+                  }}
+                />
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-700">
+                    {u.name.charAt(0)}
+                  </div>
+                  <span className="text-xs font-bold text-slate-700">{u.name}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <button onClick={() => { onSave(data); onClose(); }} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold">Create Project</button>
       </div>
     </div>
   );

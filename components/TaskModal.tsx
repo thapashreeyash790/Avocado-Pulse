@@ -33,6 +33,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showTimeLogModal, setShowTimeLogModal] = useState(false);
   const [manualMinutes, setManualMinutes] = useState('');
+  const [showAssigneeSelector, setShowAssigneeSelector] = useState(false);
 
   // Timer State (Global)
   const isTimerRunning = activeTimer?.taskId === taskId;
@@ -354,16 +355,48 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
             <div>
               <div className="flex justify-between items-center mb-3">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assignees</label>
-                <button className="text-[10px] font-bold text-indigo-600 hover:underline">Manage</button>
+                <button onClick={() => setShowAssigneeSelector(!showAssigneeSelector)} className="text-[10px] font-bold text-indigo-600 hover:underline">Manage</button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {task.assignees?.map(aid => (
-                  <div key={aid} className="flex items-center gap-2 bg-white dark:bg-slate-800 pl-1 pr-3 py-1 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${aid}`} className="w-6 h-6 rounded-full bg-slate-100" alt="" />
-                    <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-[80px]">User {aid.slice(0, 3)}</span>
+
+              {showAssigneeSelector && (
+                <div className="mb-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 shadow-lg animate-in fade-in zoom-in-95 leading-none">
+                  <div className="max-h-[150px] overflow-y-auto custom-scrollbar space-y-1">
+                    {allUsers.filter(u => u.role !== UserRole.CLIENT).map(u => {
+                      const isAssigned = task.assignees?.includes(u.email);
+                      return (
+                        <button
+                          key={u.id}
+                          onClick={() => {
+                            const current = task.assignees || [];
+                            const newAssignees = isAssigned
+                              ? current.filter(e => e !== u.email)
+                              : [...current, u.email];
+                            updateTaskAssignees(taskId, newAssignees);
+                          }}
+                          className={`w-full flex items-center gap-2 p-2 rounded-lg text-xs font-bold transition-all ${isAssigned ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'}`}
+                        >
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center ${isAssigned ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>
+                            {isAssigned && <ICONS.Check className="w-3 h-3 text-white" />}
+                          </div>
+                          <span>{u.name}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                ))}
-                <button className="w-8 h-8 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-all">
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                {task.assignees?.map(email => {
+                  const u = allUsers.find(user => user.email === email);
+                  return (
+                    <div key={email} className="flex items-center gap-2 bg-white dark:bg-slate-800 pl-1 pr-3 py-1 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
+                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`} className="w-6 h-6 rounded-full bg-slate-100" alt="" />
+                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-[80px]">{u ? u.name.split(' ')[0] : email.split('@')[0]}</span>
+                    </div>
+                  );
+                })}
+                <button onClick={() => setShowAssigneeSelector(!showAssigneeSelector)} className="w-8 h-8 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-all">
                   <ICONS.Plus className="w-4 h-4" />
                 </button>
               </div>

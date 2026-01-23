@@ -637,6 +637,21 @@ app.get('/api/:resource', async (req, res) => {
         const allowed = user.accessibleProjects || [];
         const perms = user.permissions || {};
 
+        // Force strict project filtering for TEAM members
+        if (resource === 'projects') {
+          if (perms.projects === false) return res.status(403).json({ error: 'Access denied' });
+          query.$or = [
+            { members: requesterId },
+            { members: { $exists: false } }, // Legacy: public? or migrate. Safest to assume assigned only.
+            // Actually, let's include legacy 'accessibleProjects' if used?
+            // But new design prefers 'members' on Project.
+            { members: { $size: 0 } } // Default visible if no members? Or restrict? 
+            // Plan says: Whitelist. "Can view only assigned projects".
+          ];
+          // Correction: Strict whitelist. ONLY where members include ID.
+          query.members = requesterId;
+        }
+
         // Module-level blocking
         if (resource === 'invoices' && perms.billing === false) return res.status(403).json({ error: 'Access denied' });
         if (resource === 'projects' && perms.projects === false) return res.status(403).json({ error: 'Access denied' });
