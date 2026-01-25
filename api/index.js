@@ -720,7 +720,11 @@ app.get('/api/:resource', async (req, res) => {
         }
 
         if (resource === 'projects') {
-          query.id = { $in: allowed };
+          // Fix: Do NOT overwrite if we already set query.members (for Team members)
+          // valid scan: if allowed is empty but we set members, we keep members.
+          if (!query.members) {
+            query.id = { $in: allowed };
+          }
         } else if (resource === 'invoices') {
           query.projectId = { $in: allowed };
         } else if (resource === 'leads') {
