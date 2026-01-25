@@ -33,7 +33,8 @@ const DashboardView: React.FC = () => {
       return project?.clientId === user.email || project?.clientId === user.id;
     }
     // Team member: see only assigned tasks on Pulse
-    return t.assignedTo === user?.id;
+    // Check strict ID assignment OR if they are in the assignees list (which uses emails)
+    return t.assignedTo === user?.id || (user?.email && t.assignees?.includes(user.email));
   });
 
   const filteredProjects = projects.filter(p => {

@@ -680,10 +680,16 @@ app.get('/api/:resource', async (req, res) => {
           const myProjectIds = myProjects.map(p => p.id);
 
           // 2. Return tasks that are in those projects OR assigned to this user specifically
+          // Check BOTH ID and Email for robustness
+          const myEmail = user.email || '';
+
           query.$or = [
             { projectId: { $in: myProjectIds } },
             { assignees: requesterId },
-            { assignees: { $in: [requesterId] } } // Handle array if schema differs
+            { assignees: myEmail },
+            { assignees: { $in: [requesterId, myEmail] } },
+            { assignedTo: requesterId },
+            { assignedTo: myEmail }
           ];
         }
 
@@ -715,8 +721,19 @@ app.get('/api/:resource', async (req, res) => {
 
         if (resource === 'projects') {
           query.id = { $in: allowed };
-        } else if (resource === 'tasks' || resource === 'invoices') {
+        } else if (resource === 'invoices') {
           query.projectId = { $in: allowed };
+        } else if (resource === 'leads') {
+          // Allow team to see leads assigned to them specifically
+          // Check both ID and Email match to be safe
+          const myEmail = user.email || '';
+          query.$or = [
+            { assignedTo: requesterId },
+            { assignedTo: myEmail }
+          ];
+          // If we want them to see ALL leads, we'd skip this. But "only assigned" is safer default.
+          // However based on "Company" visibility issue, maybe they need to see leads they created?
+          // For now, let's allow them to see leads assigned to them.
         }
       }
     }
