@@ -82,7 +82,13 @@ export async function decryptForMe(payloadStr: string, myPrivKey: CryptoKey, myI
         const decrypted = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv }, aesKey, ciphertext);
         return new TextDecoder().decode(decrypted);
     } catch (e) {
-        // Might be an old unencrypted message or a different format
+        // If it looked like an encrypted payload (had ct/iv) but failed, it's a key/permission error
+        try {
+            const check = JSON.parse(payloadStr);
+            if (check.ct && check.iv) return "🔒 [Encrypted Message - Unable to Decrypt]";
+        } catch (_) { }
+
+        // precise fallback
         return payloadStr;
     }
 }

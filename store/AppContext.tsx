@@ -473,9 +473,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const decryptEverything = async () => {
       // 1. Decrypt Messages
-      if (messages.some(m => m.text.includes('"ct"'))) {
+      const shouldDecryptMessages = messages.some(m => m.text.trim().startsWith('{') && m.text.includes('"ct"'));
+      if (shouldDecryptMessages) {
         const decryptedMsgs = await Promise.all(messages.map(async (m) => {
-          if (m.text.includes('"ct"')) {
+          if (m.text.trim().startsWith('{')) {
             try {
               return { ...m, text: await crypto.decryptForMe(m.text, privateKey, user.id) };
             } catch (e) { return m; }
@@ -486,9 +487,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // 2. Decrypt Conversation Previews
-      if (conversations.some(c => c.lastMessage?.text?.includes('"ct"'))) {
+      const shouldDecryptConvs = conversations.some(c => c.lastMessage?.text?.trim().startsWith('{') && c.lastMessage.text.includes('"ct"'));
+      if (shouldDecryptConvs) {
         const decryptedConvs = await Promise.all(conversations.map(async (c) => {
-          if (c.lastMessage?.text?.includes('"ct"')) {
+          if (c.lastMessage?.text?.trim().startsWith('{')) {
             try {
               const decryptedText = await crypto.decryptForMe(c.lastMessage.text, privateKey, user.id);
               return { ...c, lastMessage: { ...c.lastMessage, text: decryptedText } };
