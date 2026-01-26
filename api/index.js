@@ -730,14 +730,23 @@ app.get('/api/:resource', async (req, res) => {
             // Team Member
             if (allowed && allowed.length > 0) {
               // If they have accessibleProjects, combine with members check
+              const myEmail = user.email || '';
               query.$or = [
                 { members: requesterId },
+                { members: myEmail },
                 { id: { $in: allowed } }
               ];
               // clear the strict check applied earlier
               delete query.members;
+            } else {
+              // Enforce Email check here too if allowed is empty
+              const myEmail = user.email || '';
+              query.$or = [
+                { members: requesterId },
+                { members: myEmail }
+              ];
+              delete query.members;
             }
-            // If allowed is empty, leaving 'query.members = requesterId' (set earlier) is correct.
           }
         } else if (resource === 'invoices') {
           query.projectId = { $in: allowed };
@@ -783,6 +792,7 @@ app.get('/api/:resource', async (req, res) => {
   try {
     const sort = resource === 'messages' ? { createdAt: 1 } : { updatedAt: -1 };
     const items = await Model.find(query).sort(sort);
+    res.set('X-Debug-Query', JSON.stringify(query));
     res.json(items);
   } catch (err) {
     console.error('GET Error:', err.message);
