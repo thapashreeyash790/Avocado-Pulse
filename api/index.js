@@ -661,6 +661,7 @@ app.get('/api/:resource', async (req, res) => {
         // TEAM or custom roles
         const allowed = user.accessibleProjects || [];
         const perms = user.permissions || {};
+        console.log(`[API DEBUG] Resource: ${resource}, Role: ${user.role}, Perms:`, JSON.stringify(perms), 'Requester:', requesterId);
 
         // Force strict project filtering for TEAM members
         if (resource === 'projects') {
@@ -722,17 +723,22 @@ app.get('/api/:resource', async (req, res) => {
         }
 
         if (resource === 'projects') {
-          // Fix: Do NOT overwrite if we already set query.members (for Team members)
-          // Also SKIP if user is a manager (they see all projects)
+          // Improved Logic:
+          // 1. Managers see ALL (query remains {})
+          // 2. Team sees projects they are a 'member' of OR projects in their 'accessibleProjects' list
 
-          // Rule: If we are filtering by members, DO NOT filter by ID list from accessibleProjects
-          // Rule: If we are a manager, DO NOT filter by ID list
-
-          const isFilteringByMembers = !!query.members;
-          const isManager = !!perms.management;
-
-          if (!isFilteringByMembers && !isManager) {
-            query.id = { $in: allowed };
+          if (!perms.management) {
+            // Team Member
+            if (allowed && allowed.length > 0) {
+              // If they have accessibleProjects, combine with members check
+              query.$or = [
+                { members: requesterId },
+                { id: { $in: allowed } }
+              ];
+              // clear the strict check applied earlier
+              delete query.members;
+            }
+            // If allowed is empty, leaving 'query.members = requesterId' (set earlier) is correct.
           }
         } else if (resource === 'invoices') {
           query.projectId = { $in: allowed };
@@ -748,6 +754,7 @@ app.get('/api/:resource', async (req, res) => {
           // However based on "Company" visibility issue, maybe they need to see leads they created?
           // For now, let's allow them to see leads assigned to them.
         }
+        console.log(`[API DEBUG] Final Query for ${resource}:`, JSON.stringify(query));
       }
     }
   }
