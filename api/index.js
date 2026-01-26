@@ -724,7 +724,14 @@ app.get('/api/:resource', async (req, res) => {
         if (resource === 'projects') {
           // Fix: Do NOT overwrite if we already set query.members (for Team members)
           // Also SKIP if user is a manager (they see all projects)
-          if (!query.members && !perms.management) {
+
+          // Rule: If we are filtering by members, DO NOT filter by ID list from accessibleProjects
+          // Rule: If we are a manager, DO NOT filter by ID list
+
+          const isFilteringByMembers = !!query.members;
+          const isManager = !!perms.management;
+
+          if (!isFilteringByMembers && !isManager) {
             query.id = { $in: allowed };
           }
         } else if (resource === 'invoices') {
