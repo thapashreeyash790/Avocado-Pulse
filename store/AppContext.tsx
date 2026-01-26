@@ -875,7 +875,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // If I change return, I must preserve "isNotArchived" unless that was also causing issues? 
     // "p.status !== 'ARCHIVED'" is correct.
 
-    return isClientMatch && p.status !== 'ARCHIVED';
+    // Check membership
+    const isMember = p.members?.includes(user?.id || '');
+
+    return (isClientMatch || isMember) && p.status !== 'ARCHIVED';
   });
 
   const filteredTasks = isInternal
