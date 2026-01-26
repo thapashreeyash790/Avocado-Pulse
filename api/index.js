@@ -661,7 +661,6 @@ app.get('/api/:resource', async (req, res) => {
         // TEAM or custom roles
         const allowed = user.accessibleProjects || [];
         const perms = user.permissions || {};
-        console.log(`[API DEBUG] Resource: ${resource}, Role: ${user.role}, Perms:`, JSON.stringify(perms), 'Requester:', requesterId);
 
         // Force strict project filtering for TEAM members
         if (resource === 'projects') {
@@ -754,7 +753,6 @@ app.get('/api/:resource', async (req, res) => {
           // However based on "Company" visibility issue, maybe they need to see leads they created?
           // For now, let's allow them to see leads assigned to them.
         }
-        console.log(`[API DEBUG] Final Query for ${resource}:`, JSON.stringify(query));
       }
     }
   }
