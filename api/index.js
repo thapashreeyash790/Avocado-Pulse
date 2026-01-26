@@ -643,17 +643,17 @@ app.get('/api/:resource', async (req, res) => {
     if (user) {
       if (user.role === 'CLIENT') {
         if (resource === 'projects') {
-          query.clientId = user.email;
+          query.clientId = { $regex: new RegExp(`^${user.email}$`, 'i') };
         } else if (resource === 'tasks' || resource === 'invoices' || resource === 'tickets' || resource === 'estimates' || resource === 'expenses') {
           // Attempt to filter by clientId first if it exists on the schema
           const model = getModel(resource);
           const hasClientId = model && model.schema.path('clientId');
 
           if (hasClientId) {
-            query.clientId = user.email;
+            query.clientId = { $regex: new RegExp(`^${user.email}$`, 'i') };
           } else {
             // Fallback to projectId lookup
-            const clientProjects = await Project.find({ clientId: user.email });
+            const clientProjects = await Project.find({ clientId: { $regex: new RegExp(`^${user.email}$`, 'i') } });
             query.projectId = { $in: clientProjects.map(p => p.id) };
           }
         }
