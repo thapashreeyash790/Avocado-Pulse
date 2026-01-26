@@ -1013,8 +1013,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (conv && conv.type === 'DIRECT') {
         const pubKeys: Record<string, string> = {};
         // Add sender's pubkey
-        const sender = allUsers.find(u => u.id === user.id);
-        if (sender?.publicKey) pubKeys[user.id] = sender.publicKey;
+        // Add sender's pubkey (Use local user object to ensure latest key is used)
+        if (user.publicKey) pubKeys[user.id] = user.publicKey;
 
         // Add partner's pubkey
         const partnerId = conv.participants.find(p => p !== user.id);
