@@ -33,6 +33,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showTimeLogModal, setShowTimeLogModal] = useState(false);
   const [manualMinutes, setManualMinutes] = useState('');
+  const [showAssigneeSelector, setShowAssigneeSelector] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistText, setEditingChecklistText] = useState('');
