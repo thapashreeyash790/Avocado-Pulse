@@ -34,6 +34,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
   const [showTimeLogModal, setShowTimeLogModal] = useState(false);
   const [manualMinutes, setManualMinutes] = useState('');
   const [showAssigneeSelector, setShowAssigneeSelector] = useState(false);
+  const [newChecklistItem, setNewChecklistItem] = useState('');
 
   // Timer State (Global)
   const isTimerRunning = activeTimer?.taskId === taskId;
@@ -58,6 +59,21 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isTimerRunning, activeTimer]);
+
+  const handleAddChecklistItem = () => {
+    if (!newChecklistItem.trim() || !task) return;
+    const newItem = {
+      id: Math.random().toString(36).substr(2, 9),
+      text: newChecklistItem.trim(),
+      isCompleted: false
+    };
+    const newChecklist = [...task.checklist, newItem];
+    const completedCount = newChecklist.filter(i => i.isCompleted).length;
+    const progress = Math.round((completedCount / newChecklist.length) * 100);
+
+    updateTask(taskId, { checklist: newChecklist, progress });
+    setNewChecklistItem('');
+  };
 
   const formatElapsed = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -262,6 +278,21 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
                 {task.checklist.length === 0 && (
                   <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border-2 border-dashed border-slate-100 dark:border-slate-700 text-slate-400 text-xs font-medium">No checklist items yet.</div>
                 )}
+
+                {canEdit && (
+                  <div className="flex gap-2 mt-3 pt-2">
+                    <input
+                      value={newChecklistItem}
+                      onChange={(e) => setNewChecklistItem(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddChecklistItem()}
+                      placeholder="Add an item..."
+                      className="flex-1 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-white"
+                    />
+                    <button onClick={handleAddChecklistItem} className="px-4 py-2 bg-slate-900 dark:bg-slate-700 text-white rounded-xl font-bold text-sm hover:bg-black dark:hover:bg-slate-600 transition-all shadow-md">
+                      Add
+                    </button>
+                  </div>
+                )}
               </div>
             </section>
 
@@ -319,6 +350,19 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
             >
               {Object.values(TaskStatus).map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
             </select>
+          </div>
+
+          {/* Due Date Card */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <ICONS.Calendar className="w-3 h-3" /> Due Date
+            </label>
+            <input
+              type="date"
+              value={task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : ''}
+              onChange={(e) => updateTask(taskId, { dueDate: e.target.value })}
+              className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 block appearance-none cursor-pointer"
+            />
           </div>
 
           {/* Timer Card */}
