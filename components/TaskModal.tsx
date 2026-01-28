@@ -33,8 +33,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showTimeLogModal, setShowTimeLogModal] = useState(false);
   const [manualMinutes, setManualMinutes] = useState('');
-  const [showAssigneeSelector, setShowAssigneeSelector] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState('');
+  const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
+  const [editingChecklistText, setEditingChecklistText] = useState('');
 
   // Timer State (Global)
   const isTimerRunning = activeTimer?.taskId === taskId;
@@ -68,11 +69,37 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
       isCompleted: false
     };
     const newChecklist = [...task.checklist, newItem];
-    const completedCount = newChecklist.filter(i => i.isCompleted).length;
-    const progress = Math.round((completedCount / newChecklist.length) * 100);
-
-    updateTask(taskId, { checklist: newChecklist, progress });
+    updateTaskChecklist(newChecklist);
     setNewChecklistItem('');
+  };
+
+  const handleDeleteChecklistItem = (itemId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!task) return;
+    const newChecklist = task.checklist.filter(i => i.id !== itemId);
+    updateTaskChecklist(newChecklist);
+  };
+
+  const startEditingItem = (item: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingChecklistId(item.id);
+    setEditingChecklistText(item.text);
+  };
+
+  const saveEditingItem = () => {
+    if (!task || !editingChecklistId) return;
+    const newChecklist = task.checklist.map(i =>
+      i.id === editingChecklistId ? { ...i, text: editingChecklistText } : i
+    );
+    updateTaskChecklist(newChecklist);
+    setEditingChecklistId(null);
+    setEditingChecklistText('');
+  };
+
+  const updateTaskChecklist = (newChecklist: any[]) => {
+    const completedCount = newChecklist.filter(i => i.isCompleted).length;
+    const progress = Math.round((completedCount / (newChecklist.length || 1)) * 100);
+    updateTask(taskId, { checklist: newChecklist, progress });
   };
 
   const formatElapsed = (seconds: number) => {
@@ -268,11 +295,43 @@ const TaskModal: React.FC<TaskModalProps> = ({ taskId, onClose }) => {
               </div>
               <div className="space-y-2">
                 {task.checklist.map(item => (
-                  <div key={item.id} onClick={() => handleToggleChecklist(item.id)} className={`group flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${item.isCompleted ? 'bg-slate-50 dark:bg-slate-800/50 border-transparent opacity-60' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-800 hover:shadow-sm'}`}>
-                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${item.isCompleted ? 'bg-emerald-500 border-emerald-500' : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 group-hover:border-indigo-400'}`}>
-                      {item.isCompleted && <ICONS.Check className="w-3.5 h-3.5 text-white" />}
+                  <div key={item.id} onClick={() => handleToggleChecklist(item.id)} className={`group flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${item.isCompleted ? 'bg-slate-50 dark:bg-slate-800/50 border-transparent opacity-60' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-800 hover:shadow-sm'}`}>
+                    <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                      <div className={`flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center transition-all ${item.isCompleted ? 'bg-emerald-500 border-emerald-500' : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 group-hover:border-indigo-400'}`}>
+                        {item.isCompleted && <ICONS.Check className="w-3.5 h-3.5 text-white" />}
+                      </div>
+
+                      {editingChecklistId === item.id ? (
+                        <div className="flex-1 flex gap-2" onClick={e => e.stopPropagation()}>
+                          <input
+                            autoFocus
+                            value={editingChecklistText}
+                            onChange={e => setEditingChecklistText(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') saveEditingItem();
+                              if (e.key === 'Escape') setEditingChecklistId(null);
+                            }}
+                            className="flex-1 p-1 bg-white border border-indigo-300 rounded text-sm outline-none"
+                          />
+                          <button onClick={saveEditingItem} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"><ICONS.Check className="w-4 h-4" /></button>
+                          <button onClick={() => setEditingChecklistId(null)} className="p-1 text-slate-400 hover:bg-slate-100 rounded"><ICONS.X className="w-4 h-4" /></button>
+                        </div>
+                      ) : (
+                        <span className={`text-sm font-medium truncate ${item.isCompleted ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-200'}`}>{item.text}</span>
+                      )}
                     </div>
-                    <span className={`text-sm font-medium ${item.isCompleted ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-200'}`}>{item.text}</span>
+
+                    {/* Actions */}
+                    {canEdit && editingChecklistId !== item.id && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-2">
+                        <button onClick={(e) => startEditingItem(item, e)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                          <ICONS.Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={(e) => handleDeleteChecklistItem(item.id, e)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
+                          <ICONS.Trash className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {task.checklist.length === 0 && (
